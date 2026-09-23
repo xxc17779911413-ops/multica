@@ -251,7 +251,9 @@ import type {
   TaskPermissionRolesResponse,
   TaskRetryPolicy,
   TaskRetryPolicyRequest,
-  UpdateTaskRetryPolicyRequest,, RecentIssueViewsResponse } from "../types";
+  UpdateTaskRetryPolicyRequest,
+  RecentIssueViewsResponse,
+} from "../types";
 import type { OnboardingCompletionPath } from "../onboarding/types";
 import type {
   CreateFeedbackResponse,
