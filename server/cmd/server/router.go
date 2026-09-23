@@ -1686,6 +1686,10 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 					r.Use(middleware.RequireWorkspaceMemberFromURL(queries, "id"))
 					r.Get("/", h.GetWorkspace)
 					r.Get("/members", h.ListMembersWithUser)
+					// The organization directory backs the settings tab of the
+					// same name; member-visible because a member must be able to
+					// see which organizations can be granted permissions.
+					r.Get("/projectauth/organizations", h.ListProjectAuthorizationOrganizations)
 					r.Post("/leave", h.LeaveWorkspace)
 					r.Get("/invitations", h.ListWorkspaceInvitations)
 					// Listing GitHub installations is member-visible so the
@@ -1721,6 +1725,13 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 					r.Use(middleware.RequireWorkspaceRoleFromURL(queries, "id", "owner", "admin"))
 					r.Put("/", h.UpdateWorkspace)
 					r.Patch("/", h.UpdateWorkspace)
+					// Organization directory maintenance is admin-only. The
+					// DingTalk live-sync route is intentionally absent: its
+					// handler lives in the fork's private dingtalk-notify
+					// extension, which this deployment does not ship.
+					r.Get("/projectauth/organizations/template", h.ProjectAuthorizationOrganizationTemplate)
+					r.Post("/projectauth/organizations/import/preview", h.PreviewProjectAuthorizationOrganizationImport)
+					r.Post("/projectauth/organizations/import", h.ImportProjectAuthorizationOrganizations)
 					r.Post("/members", h.CreateInvitation)
 					r.Route("/members/{memberId}", func(r chi.Router) {
 						r.Patch("/", h.UpdateMember)

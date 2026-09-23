@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { Download, FileText, Loader2, RefreshCw, Upload } from "lucide-react";
+import { Download, FileText, Loader2, Upload } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@multica/core/api";
 import { useAuthStore } from "@multica/core/auth";
@@ -9,7 +9,6 @@ import { useWorkspaceId } from "@multica/core/hooks";
 import { useCurrentWorkspace } from "@multica/core/paths";
 import { memberListOptions } from "@multica/core/workspace/queries";
 import type {
-  ProjectAuthorizationDingTalkSyncResult,
   ProjectAuthorizationImportKind,
   ProjectAuthorizationImportPreview,
   ProjectAuthorizationImportResult,
@@ -34,15 +33,12 @@ export function ProjectAuthorizationOrganizationsTab() {
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
-  const [syncDialogOpen, setSyncDialogOpen] = useState(false);
   const [kind, setKind] = useState<ProjectAuthorizationImportKind>("organizations");
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<ProjectAuthorizationImportPreview | null>(null);
   const [importResult, setImportResult] = useState<ProjectAuthorizationImportResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [importing, setImporting] = useState(false);
-  const [syncing, setSyncing] = useState(false);
-  const [syncResult, setSyncResult] = useState<ProjectAuthorizationDingTalkSyncResult | null>(null);
 
   const { data: members = [] } = useQuery({
     ...memberListOptions(workspaceId),
@@ -69,11 +65,6 @@ export function ProjectAuthorizationOrganizationsTab() {
   const closeImportDialog = (open: boolean) => {
     setImportDialogOpen(open);
     if (!open) resetImport();
-  };
-
-  const closeSyncDialog = (open: boolean) => {
-    setSyncDialogOpen(open);
-    if (!open) setSyncResult(null);
   };
 
   const downloadTemplate = async () => {
@@ -130,20 +121,6 @@ export function ProjectAuthorizationOrganizationsTab() {
     }
   };
 
-  const syncDingTalk = async () => {
-    setSyncing(true);
-    try {
-      const result = await api.syncProjectAuthorizationDingTalk(workspaceId);
-      setSyncResult(result);
-      await queryClient.invalidateQueries({ queryKey: ["project-permission-organizations", workspaceId] });
-      toast.success(t(($) => $.project_authorization_organizations.sync_success));
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : t(($) => $.project_authorization_organizations.sync_failed));
-    } finally {
-      setSyncing(false);
-    }
-  };
-
   const previewRows = kind === "organizations" ? preview?.organizations ?? [] : preview?.members ?? [];
 
   return (
@@ -156,10 +133,6 @@ export function ProjectAuthorizationOrganizationsTab() {
             <Button variant="outline" onClick={openImportDialog} disabled={!canManage}>
               <Upload className="mr-1 size-4" />
               {t(($) => $.project_authorization_organizations.file_import)}
-            </Button>
-            <Button variant="outline" onClick={() => setSyncDialogOpen(true)} disabled={!canManage}>
-              <RefreshCw className="mr-1 size-4" />
-              {t(($) => $.project_authorization_organizations.sync_dingtalk_button)}
             </Button>
           </div>
         }
@@ -276,39 +249,6 @@ export function ProjectAuthorizationOrganizationsTab() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={syncDialogOpen} onOpenChange={closeSyncDialog}>
-        <DialogContent className="max-h-[min(90vh,52rem)] overflow-y-auto sm:max-w-xl">
-          <DialogHeader>
-            <DialogTitle>{t(($) => $.project_authorization_organizations.sync_dingtalk_title)}</DialogTitle>
-            <DialogDescription>{t(($) => $.project_authorization_organizations.sync_dingtalk_description)}</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <Button className="w-full sm:w-auto" onClick={() => void syncDingTalk()} disabled={syncing}>
-              {syncing ? <Loader2 className="mr-1 size-4 animate-spin" /> : <RefreshCw className="mr-1 size-4" />}
-              {t(($) => $.project_authorization_organizations.sync_dingtalk)}
-            </Button>
-            {syncResult ? (
-              <div className="rounded-lg border border-surface-border">
-                <div className="px-4 py-3 text-body font-medium">{t(($) => $.project_authorization_organizations.sync_result_title)}</div>
-                <div className="grid gap-3 border-t border-surface-border px-4 py-4 text-caption sm:grid-cols-2">
-                  <span>{t(($) => $.project_authorization_organizations.sync_created, { count: syncResult.organizations_created })}</span>
-                  <span>{t(($) => $.project_authorization_organizations.sync_updated, { count: syncResult.organizations_updated })}</span>
-                  <span>{t(($) => $.project_authorization_organizations.sync_disabled, { count: syncResult.organizations_disabled })}</span>
-                  <span>{t(($) => $.project_authorization_organizations.sync_members, { count: syncResult.members_created })}</span>
-                  <span>{t(($) => $.project_authorization_organizations.sync_removed, { count: syncResult.members_removed })}</span>
-                  <span>{t(($) => $.project_authorization_organizations.sync_users_created, { count: syncResult.users_created })}</span>
-                  <span>{t(($) => $.project_authorization_organizations.sync_users_matched, { count: syncResult.users_matched })}</span>
-                  <span>{t(($) => $.project_authorization_organizations.sync_workspace_members, { count: syncResult.workspace_members_created })}</span>
-                </div>
-                {syncResult.unmatched.length ? <p className="border-t border-surface-border px-4 py-3 text-caption text-muted-foreground break-words">{syncResult.unmatched.join("、")}</p> : null}
-              </div>
-            ) : null}
-          </div>
-          <DialogFooter>
-            <DialogClose render={<Button variant="outline" />}>{t(($) => $.project_authorization_organizations.close)}</DialogClose>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </>
   );
 }
