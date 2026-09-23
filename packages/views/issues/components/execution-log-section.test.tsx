@@ -43,8 +43,10 @@ vi.mock("./terminate-task-confirm-dialog", () => ({
 import {
   ActiveTaskRow,
   ExecutionLogSection,
+  LocateRunComment,
   TaskCommentCoverage,
   IssueUsageTotal,
+  taskTriggerCommentId,
 } from "./execution-log-section";
 import type { TaskUsage } from "@multica/core/types";
 import { act, within } from "@testing-library/react";
@@ -457,5 +459,34 @@ describe("IssueUsageTotal pricing", () => {
 
     // 1M input tokens at $7/M, without any refetch.
     expect(screen.getByText("$7.00")).toBeInTheDocument();
+  });
+});
+
+describe("run-row comment deep link", () => {
+  it("double-clicking a run row lands on its trigger comment", () => {
+    const onLocateComment = vi.fn();
+    const task = makeTask({ trigger_comment_id: "comment-42", status: "completed" });
+    renderWithI18n(
+      <LocateRunComment task={task} onLocateComment={onLocateComment}>
+        <span>row</span>
+      </LocateRunComment>,
+    );
+    fireEvent.doubleClick(screen.getByText("row"));
+    expect(onLocateComment).toHaveBeenCalledWith("comment-42");
+  });
+
+  it("anchors on the newest delivered or coalesced comment when the trigger is gone", () => {
+    expect(taskTriggerCommentId(makeTask({ trigger_comment_id: "c-trigger" }))).toBe("c-trigger");
+    expect(
+      taskTriggerCommentId(
+        makeTask({
+          delivered_comment_ids: ["c-1", "c-2"],
+          coalesced_comment_ids: ["c-3"],
+        }),
+      ),
+    ).toBe("c-2");
+    expect(taskTriggerCommentId(makeTask({ coalesced_comment_ids: ["c-3", "c-4"] }))).toBe("c-4");
+    expect(taskTriggerCommentId(makeTask({ supplement_comment_ids: ["c-5"] }))).toBe("c-5");
+    expect(taskTriggerCommentId(makeTask({}))).toBeUndefined();
   });
 });

@@ -1466,6 +1466,19 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
   // landing effect below replays on an already-mounted detail.
   const lastHighlightRequestTokenRef = useRef(highlightRequestToken);
 
+  // Run-row double-click (execution log / header chip) lands on the comment
+  // that triggered the run, reusing the deep-link landing below. A local jump
+  // is a fresh user intent on every double-click, so it owns its own token and
+  // clears the once-per-id landing guards before replaying.
+  const [runCommentJump, setRunCommentJump] = useState<{ id: string; token: number } | null>(null);
+  const locateRunComment = useCallback((commentId: string) => {
+    didHighlightRef.current = null;
+    consumedHighlightRef.current = undefined;
+    setRunCommentJump((prev) => ({ id: commentId, token: (prev?.token ?? 0) + 1 }));
+  }, []);
+  const effectiveHighlightCommentId = runCommentJump?.id ?? highlightCommentId;
+  const effectiveHighlightToken = runCommentJump ? runCommentJump.token : highlightRequestToken;
+
   // Issue data from TQ — uses detail query, seeded from list cache if available.
   // Only seed when description is present; the list API omits it, so a partial
   // list row must not masquerade as a hydrated issue detail.
@@ -1738,13 +1751,13 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
   // Deep-link target index in the flat items array. For root comments this is
   // a direct findIndex hit; for reply ids we look up the enclosing root.
   const targetIdx = useMemo(() => {
-    if (!highlightCommentId) return -1;
-    const direct = items.findIndex((it) => it.id === highlightCommentId);
+    if (!effectiveHighlightCommentId) return -1;
+    const direct = items.findIndex((it) => it.id === effectiveHighlightCommentId);
     if (direct >= 0) return direct;
-    const rootId = replyToRoot.get(highlightCommentId);
+    const rootId = replyToRoot.get(effectiveHighlightCommentId);
     if (!rootId) return -1;
     return items.findIndex((it) => it.id === rootId);
-  }, [items, highlightCommentId, replyToRoot]);
+  }, [items, effectiveHighlightCommentId, replyToRoot]);
 
   // One entry per comment thread (folded resolved bars included), activity
   // groups skipped. Derived from the same flat `items` array Virtuoso renders
@@ -1773,7 +1786,7 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
 
   // When the timeline renders flat (deep-link or in-page find), there is no
   // Virtuoso instance — minimap jumps drive the scroll container directly.
-  const isFlatTimeline = !!highlightCommentId || find.open;
+  const isFlatTimeline = !!effectiveHighlightCommentId || find.open;
   const virtuosoRef = useRef<VirtuosoHandle>(null);
   // Scroll a freshly posted comment into view, aligned so its bottom sits just
   // above the sticky composer (never behind it). A reply lives inside its root
@@ -2015,26 +2028,26 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
   // ref populates only on the post-loading render, so it's the signal that
   // the timeline (and the deep-link target id) has actually rendered.
   useEffect(() => {
-    if (!highlightCommentId || items.length === 0) return;
+    if (!effectiveHighlightCommentId || items.length === 0) return;
     // An explicit replay request (re-click on the already-open notification
     // row): the host cleared the memento entry and bumped the token, so
     // re-arm the landing guard and fall through to the jump.
-    if (lastHighlightRequestTokenRef.current !== highlightRequestToken) {
-      lastHighlightRequestTokenRef.current = highlightRequestToken;
+    if (lastHighlightRequestTokenRef.current !== effectiveHighlightToken) {
+      lastHighlightRequestTokenRef.current = effectiveHighlightToken;
       didHighlightRef.current = null;
     }
-    if (didHighlightRef.current === highlightCommentId) return;
+    if (didHighlightRef.current === effectiveHighlightCommentId) return;
     // The deep link already landed before this mount (memento entry — a tab
     // switch back or an in-tab return). The restored scroll offset is the
     // state the user left, and the jump must not fight it. A fresh selection
     // clears the entry, so this only ever suppresses a *repeat* landing.
-    if (consumedHighlightRef.current === highlightCommentId) {
-      didHighlightRef.current = highlightCommentId;
+    if (consumedHighlightRef.current === effectiveHighlightCommentId) {
+      didHighlightRef.current = effectiveHighlightCommentId;
       return;
     }
 
-    const rootId = replyToRoot.get(highlightCommentId);
-    if (rootId && rootId !== highlightCommentId) {
+    const rootId = replyToRoot.get(effectiveHighlightCommentId);
+    if (rootId && rootId !== effectiveHighlightCommentId) {
       // Root resolved → the whole thread is a folded bar.
       const rootItem = items[targetIdx];
       if (rootItem?.kind === "resolved-bar" || (rootItem?.kind === "run" && rootItem.entry?.resolved_at && !expandedResolved.has(rootId))) {
@@ -2048,7 +2061,7 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
           rootItem.entry,
           timelineView.threadReplies.get(rootId) ?? EMPTY_REPLIES,
         );
-        if (resolution.kind === "reply" && resolution.resolutionId !== highlightCommentId) {
+        if (resolution.kind === "reply" && resolution.resolutionId !== effectiveHighlightCommentId) {
           toggleResolvedExpand(rootId, true);
           return;
         }
@@ -2059,9 +2072,9 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
     // carries has no anchor to scroll to and no row to flash. Land on the
     // comment above where it was; the id itself stays this landing's identity
     // for the guards and the memento below.
-    const threadRootId = rootId ?? highlightCommentId;
+    const threadRootId = rootId ?? effectiveHighlightCommentId;
     const landingId = commentLandingTarget(
-      highlightCommentId,
+      effectiveHighlightCommentId,
       threadRootId,
       timelineView.threadReplies.get(threadRootId) ?? EMPTY_REPLIES,
     );
@@ -2069,11 +2082,11 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
     const container = scrollContainerEl;
     if (!el || !container) return;
 
-    didHighlightRef.current = highlightCommentId;
+    didHighlightRef.current = effectiveHighlightCommentId;
     // Record the landing in the memento so a remount that merely restores
     // this view (tab switch back) skips the jump instead of replaying it
     // over the restored scroll position.
-    writeViewState(issueHighlightMementoKey(id), highlightCommentId);
+    writeViewState(issueHighlightMementoKey(id), effectiveHighlightCommentId);
 
     // Center the target comment WITHIN its own scroll container by driving the
     // container's scrollTop directly — never native scrollIntoView. Native
@@ -2112,7 +2125,7 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
       cancelAnimationFrame(rafId);
       clearTimeout(fade);
     };
-  }, [highlightCommentId, highlightRequestToken, id, writeViewState, items, targetIdx, scrollContainerEl, replyToRoot, expandedResolved, timelineView, toggleResolvedExpand]);
+  }, [effectiveHighlightCommentId, effectiveHighlightToken, id, writeViewState, items, targetIdx, scrollContainerEl, replyToRoot, expandedResolved, timelineView, toggleResolvedExpand]);
 
   const descEditorRef = useRef<ContentEditorRef>(null);
   const descriptionEditingRef = useRef(false);
@@ -2699,7 +2712,7 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
           own token spend, with the issue total on the section header.
           Self-contained; owns its own collapse state and WS subscriptions.
           Hides itself when there are no runs to show. */}
-      <ExecutionLogSection issueId={id} identifier={issue.identifier} />
+      <ExecutionLogSection issueId={id} identifier={issue.identifier} onLocateComment={locateRunComment} />
 
       {/* Details — creator and timestamps. Sits below the execution log
           because it is the least-read block in the sidebar: the values
@@ -2923,7 +2936,7 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
             {/* Live "agent is working" chip, leftmost in the right cluster so
                 it never overlaps the title (which truncates to make room).
                 It self-hides when no agent is active. */}
-            <IssueAgentHeaderChip issueId={id} />
+            <IssueAgentHeaderChip issueId={id} onLocateComment={locateRunComment} />
             {onDone && !issueBehavesAsAny(issue, ["done", "closed"]) && (
               <Tooltip>
                 <TooltipTrigger
@@ -3549,7 +3562,7 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
               // on a target" have fundamentally opposed contracts (estimated
               // heights vs real heights). Trying to satisfy both in one
               // path is what produced the bug history this PR closes.
-              !highlightCommentId && !find.open ? (
+              !effectiveHighlightCommentId && !find.open ? (
                 !scrollContainerEl ? (
                   // Skeleton while the callback ref populates so the gap
                   // between IssueDetail mount and Virtuoso mount doesn't

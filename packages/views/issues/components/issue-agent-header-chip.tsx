@@ -15,7 +15,7 @@ import { issueKeys } from "@multica/core/issues/queries";
 import type { AgentTask } from "@multica/core/types";
 import { TranscriptButton } from "../../common/task-transcript";
 import { AgentAvatarStack } from "../../agents/components/agent-avatar-stack";
-import { ActiveTaskRow } from "./execution-log-section";
+import { ActiveTaskRow, LocateRunComment } from "./execution-log-section";
 import { useT } from "../../i18n";
 import { compareActiveIssueTasks } from "./active-task-order";
 
@@ -44,10 +44,13 @@ import { compareActiveIssueTasks } from "./active-task-order";
 
 interface IssueAgentHeaderChipProps {
   issueId: string;
+  /** Double-click a run row to land on the comment that triggered the run. */
+  onLocateComment?: (commentId: string) => void;
 }
 
 export const IssueAgentHeaderChip = memo(function IssueAgentHeaderChip({
   issueId,
+  onLocateComment,
 }: IssueAgentHeaderChipProps) {
   const { t } = useT("issues");
   // Same query options as ExecutionLogSection so both observe one cache entry.
@@ -99,6 +102,7 @@ export const IssueAgentHeaderChip = memo(function IssueAgentHeaderChip({
           issueId={issueId}
           running={running}
           queued={queued}
+          onLocateComment={onLocateComment}
           onTranscriptOpenChange={(task, open, fromKeyboard) => {
             setOpenedTranscript(open ? { task, fromKeyboard } : null);
           }}
@@ -125,6 +129,7 @@ export const IssueAgentHeaderChip = memo(function IssueAgentHeaderChip({
 interface ActiveChipProps {
   issueId: string;
   running: AgentTask[];
+  onLocateComment?: (commentId: string) => void;
   queued: AgentTask[];
   onTranscriptOpenChange: (
     task: AgentTask,
@@ -137,6 +142,7 @@ function ActiveChip({
   issueId,
   running,
   queued,
+  onLocateComment,
   onTranscriptOpenChange,
 }: ActiveChipProps) {
   const { t } = useT("issues");
@@ -223,14 +229,15 @@ function ActiveChip({
           </div>
           <div className="flex flex-col gap-0.5">
             {activeTasks.map((task) => (
-              <ActiveTaskRow
-                key={task.id}
-                task={task}
-                issueId={issueId}
-                onTranscriptOpenChange={(open, fromKeyboard) => {
-                  onTranscriptOpenChange(task, open, fromKeyboard === true);
-                }}
-              />
+              <LocateRunComment key={task.id} task={task} onLocateComment={onLocateComment}>
+                <ActiveTaskRow
+                  task={task}
+                  issueId={issueId}
+                  onTranscriptOpenChange={(open, fromKeyboard) => {
+                    onTranscriptOpenChange(task, open, fromKeyboard === true);
+                  }}
+                />
+              </LocateRunComment>
             ))}
           </div>
         </PopoverContent>

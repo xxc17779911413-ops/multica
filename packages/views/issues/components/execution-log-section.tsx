@@ -59,6 +59,8 @@ interface ExecutionLogSectionProps {
   issueId: string;
   /** Shown in the usage dialog's subtitle so the panel names what it totals. */
   identifier?: string;
+  /** Double-click a run row to land on the comment that triggered the run. */
+  onLocateComment?: (commentId: string) => void;
 }
 
 // Past-runs sort priority: newest first by timestamp. When two runs
@@ -70,7 +72,7 @@ const PAST_STATUS_RANK: Record<string, number> = {
   completed: 2,
 };
 
-export function ExecutionLogSection({ issueId, identifier }: ExecutionLogSectionProps) {
+export function ExecutionLogSection({ issueId, identifier, onLocateComment }: ExecutionLogSectionProps) {
   const { t } = useT("issues");
   const [open, setOpen] = useState(true);
   const [showPast, setShowPast] = useState(false);
@@ -166,7 +168,9 @@ export function ExecutionLogSection({ issueId, identifier }: ExecutionLogSection
       {open && (
         <div className="space-y-0.5 pl-2">
           {activeTasks.map((task) => (
-            <ActiveTaskRow key={task.id} task={task} issueId={issueId} />
+            <LocateRunComment key={task.id} task={task} onLocateComment={onLocateComment}>
+              <ActiveTaskRow task={task} issueId={issueId} />
+            </LocateRunComment>
           ))}
 
           {pastTasks.length > 0 && (
@@ -191,7 +195,9 @@ export function ExecutionLogSection({ issueId, identifier }: ExecutionLogSection
               {showPast && (
                 <div className="mt-0.5 space-y-0.5">
                   {pastTasks.map((task) => (
-                    <PastRow key={task.id} task={task} issueId={issueId} />
+                    <LocateRunComment key={task.id} task={task} onLocateComment={onLocateComment}>
+                      <PastRow task={task} issueId={issueId} />
+                    </LocateRunComment>
                   ))}
                 </div>
               )}
@@ -582,6 +588,50 @@ function PastRow({ task, issueId }: { task: AgentTask; issueId: string }) {
         )}
       </RowActions>
     </RowShell>
+  );
+}
+
+// ─── Run-row deep link ─────────────────────────────────────────────────────
+
+/**
+ * The comment a run is anchored to in the issue stream: its newest trigger, or
+ * the latest comment folded into the run when the original trigger is gone.
+ * Autopilot- and quick-create-spawned runs have no comment anchor → undefined.
+ */
+export function taskTriggerCommentId(task: AgentTask): string | undefined {
+  if (task.trigger_comment_id) return task.trigger_comment_id;
+  const last = (ids?: string[]) => (ids?.length ? ids[ids.length - 1] : undefined);
+  return (
+    last(task.delivered_comment_ids) ??
+    last(task.coalesced_comment_ids) ??
+    last(task.supplement_comment_ids)
+  );
+}
+
+/**
+ * Double-clicking a run row jumps to the comment that triggered the run — the
+ * reply the run answers in the issue stream. Single-click actions (avatar →
+ * transcript, row buttons) stay untouched: their own handlers run first and
+ * this wrapper sits on the row chrome around them.
+ */
+export function LocateRunComment({
+  task,
+  onLocateComment,
+  children,
+}: {
+  task: AgentTask;
+  onLocateComment?: (commentId: string) => void;
+  children: React.ReactNode;
+}) {
+  const commentId = taskTriggerCommentId(task);
+  if (!commentId || !onLocateComment) return <>{children}</>;
+  return (
+    <div onDoubleClick={(event) => {
+      event.stopPropagation();
+      onLocateComment(commentId);
+    }}>
+      {children}
+    </div>
   );
 }
 
