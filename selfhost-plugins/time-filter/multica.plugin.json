@@ -1,0 +1,40 @@
+{
+  "manifest_version": 1,
+  "key": "ai.xiaopeng.time-filter",
+  "name": "任务时间筛选",
+  "description": "按创建时间或排期（开始日期）筛选今天 / 昨天 / 本周 / 上周 / 本月创建或排期的任务。",
+  "version": "1.0.1",
+  "author": { "name": "xiaxc", "url": "https://qoder.com" },
+  "scopes": ["issues:read", "net:host.docker.internal"],
+  "contributes": {
+    "surfaces": [
+      {
+        "key": "time-filter",
+        "type": "modal",
+        "name": "任务时间筛选",
+        "entry": "ui/main.js",
+        "platforms": ["web", "desktop"]
+      }
+    ],
+    "hooks": [
+      {
+        "key": "query",
+        "name": "查询任务",
+        "description": "按时间范围与基准（创建时间 / 排期）查询任务列表，返回 identifier、标题、状态、日期。",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "range": { "type": "string" },
+            "basis": { "type": "string" }
+          }
+        },
+        "triggers": ["ui"],
+        "transport": {
+          "type": "http",
+          "url": "https://host.docker.internal:9090/query"
+        },
+        "timeout_ms": 25000
+      }
+    ]
+  }
+}

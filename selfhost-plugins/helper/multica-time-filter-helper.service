@@ -1,0 +1,19 @@
+[Unit]
+Description=Multica Time-Filter Plugin Helper
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/root/multica-plugins/helper
+Environment=HOME=/root
+Environment=PATH=/root/multica-node/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=MULTICA_CLI=/root/multica-node/bin/multica
+Environment=PORT=9090
+Environment=MULTICA_HOOK_TLS_CERT=/root/multica-plugins/helper/cert.pem
+Environment=MULTICA_HOOK_TLS_KEY=/root/multica-plugins/helper/key.pem
+ExecStart=/root/multica-node/bin/node /root/multica-plugins/helper/server.mjs
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
