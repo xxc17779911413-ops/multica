@@ -474,7 +474,26 @@
     "project_directory_path_copied_with_branch": "プロジェクトディレクトリのパスをコピーしました — 作業は {{branch}} ブランチにあります",
     "workdir_path_copy_failed": "作業ディレクトリのパスをコピーできませんでした",
     "workdir_path_unavailable": "まだローカルの作業ディレクトリがありません。ローカルエージェントがこのタスクを実行していません",
-    "pull_requests_empty_title": "関連する PR はありません。"
+    "pull_requests_empty_title": "関連する PR はありません。",
+    "access_denied_title": "アクセス権限がありません",
+    "access_denied_description": "このタスクはまだ表示できません。タスクの所有者にアクセス権限を申請してください。",
+    "requested_role": "アクセスレベル",
+    "request_access": "アクセス権限を申請",
+    "my_access_requests": "自分のアクセス申請",
+    "access_request_submitted": "アクセス申請をタスクの所有者に送信しました",
+    "access_request_failed": "アクセス申請を送信できませんでした。もう一度お試しください。",
+    "access_request_cancel_failed": "申請をキャンセルできませんでした。もう一度お試しください。",
+    "access_request_role_viewer": "閲覧可能",
+    "access_request_role_editor": "編集可能",
+    "access_request_role_manager": "管理可能",
+    "access_request_status_pending": "承認待ち",
+    "access_request_status_approved": "承認済み",
+    "access_request_status_rejected": "却下済み",
+    "access_request_status_cancelled": "キャンセル済み",
+    "access_request_status_expired": "期限切れ",
+    "access_request_unknown_role": "その他の権限",
+    "access_request_unknown_status": "不明な状態",
+    "access_check_failed": "タスクの状態を確認できませんでした。"
   },
   "timeline": {
     "loading": "読み込み中..."

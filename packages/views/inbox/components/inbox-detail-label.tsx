@@ -34,9 +34,9 @@ export function useTypeLabels(): Record<InboxItemType, string> {
     reaction_added: t(($) => $.types.reaction_added),
     quick_create_done: t(($) => $.types.quick_create_done),
     quick_create_failed: t(($) => $.types.quick_create_failed),
+    task_access_request: t(($) => $.types.task_access_request),
+    task_access_granted: t(($) => $.types.task_access_granted),
     quick_create_unconfirmed: t(($) => $.types.quick_create_unconfirmed),
-    autopilot_paused: t(($) => $.types.autopilot_paused),
-    autopilot_quota_exceeded: t(($) => $.types.autopilot_quota_exceeded),
   };
 }
 
@@ -109,6 +109,16 @@ export function InboxDetailLabel({ item }: { item: InboxItem }) {
       return <span>{t(($) => $.labels.removed_due_date)}</span>;
     }
     case "new_comment": {
+      if (item.body) return <span>{item.body}</span>;
+      return <span>{typeLabels[item.type]}</span>;
+    }
+    case "task_access_granted": {
+      if (item.body) return <span>{item.body}</span>;
+      return <span>{typeLabels[item.type]}</span>;
+    }
+    // 2026-09-20 coder(lq): 权限申请/结果通知的正文由服务端按事件生成，
+    // 直接展示比用类型名更准确，缺失时再退回类型标签。
+    case "task_access_request": {
       if (item.body) return <span>{item.body}</span>;
       return <span>{typeLabels[item.type]}</span>;
     }

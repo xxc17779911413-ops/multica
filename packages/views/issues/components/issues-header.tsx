@@ -127,6 +127,7 @@ import { matchesPinyin } from "../../editor/extensions/pinyin-match";
 import { FILTER_ITEM_CLASS, HoverCheck } from "../../common/hover-check";
 import { WorkspaceAgentWorkingChip } from "./workspace-agent-working-chip";
 import { TableColumnPicker } from "./table-view";
+import { ProjectPermissionsDialog } from "../../projects/components/project-permissions-dialog";
 
 type LocalDateRange = {
   from: Date | undefined;
@@ -1376,6 +1377,7 @@ export function IssuesHeader({
               {t(($) => $.agent_activity.filter_active_label)}
             </span>
           )}
+          {dialogProjectId && <ProjectPermissionsDialog projectId={dialogProjectId} />}
           <WorkspaceAgentWorkingChip
             value={agentRunningFilter}
             onToggle={toggleAgentRunningFilter}

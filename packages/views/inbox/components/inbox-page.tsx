@@ -50,7 +50,14 @@ import {
   useInboxFilterStore,
 } from "@multica/core/inbox/filter-store";
 
-import { IssueDetail, issueHighlightMementoKey } from "../../issues/components/issue-detail";
+import {
+  IssueDetail,
+  IssueDetailSkeleton,
+  IssueNotFound,
+  RestrictedIssueAccessFallback,
+  issueHighlightMementoKey,
+} from "../../issues/components";
+import { useWorkspaceTaskVisibility } from "../../issues/surface/visibility-context";
 import { useViewStateWriter } from "../../platform";
 import { ErrorBoundary } from "@multica/ui/components/common/error-boundary";
 import { useNavigation, useReportNavigating } from "../../navigation";
@@ -346,6 +353,12 @@ export function InboxPage() {
       if (nextKey === selectedKey) {
         setHighlightRequestToken((t) => t + 1);
       }
+    }
+    // 2026-09-20 coder(lq): 任务权限申请通知点开即落到「任务授权」弹窗的对应申请上；
+    // 同一行再次点击靠 token 重放，切换行时由 IssueDetail 按 issue 重挂载自然落位，
+    // 其他类型通知不 bump，避免下拉详情时误弹权限弹窗。
+    if (item.type === "task_access_request") {
+      setAccessRequestToken((token) => token + 1);
     }
     setSelectedKey(nextKey);
   };
@@ -669,6 +682,12 @@ export function InboxPage() {
     </div>
   ) : null;
 
+  // An access notification names the request it is about. Only that type arms
+  // the permissions dialog: every other notification opens the task alone.
+  const accessRequestId = detailItem?.type === "task_access_request"
+    ? detailItem.details?.access_request_id ?? undefined
+    : undefined;
+
   const detailContent = detailItem?.issue_id ? (
     // Key by issue_id (not inbox-item id): a new comment/reaction generates a
     // new inbox notification for the same issue, and the dedup helper picks the
@@ -695,6 +714,19 @@ export function InboxPage() {
         layoutId="multica_inbox_issue_detail_layout"
         highlightCommentId={detailItem.details?.comment_id ?? undefined}
         highlightRequestToken={highlightRequestToken}
+        accessRequestId={accessRequestId}
+        accessRequestToken={accessRequestToken}
+        // A denied reader lands here holding a task they may not view. Saying
+        // "task deleted" would be wrong, so resolve what the task reference
+        // actually is and offer the access request instead.
+        notFoundFallback={detailItem.type === "task_access_request" ? (
+          <RestrictedIssueAccessFallback
+            targetId={detailItem.issue_id}
+            leading={compactBackAction}
+            loading={<IssueDetailSkeleton leading={compactBackAction} />}
+            notFound={<IssueNotFound showBackLink={false} leading={compactBackAction} />}
+          />
+        ) : undefined}
         // The split layout already has a nav trigger in the list header.
         // Explicit false suppresses the detail header's fallback trigger.
         leadingAction={compactBackAction ?? false}

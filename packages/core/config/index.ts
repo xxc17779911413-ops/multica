@@ -1,6 +1,8 @@
 import { createStore } from "zustand/vanilla";
 import { useStore } from "zustand";
 
+export type ProjectPermissionRolloutPhase = "off" | "shadow" | "reader" | "writer" | "restricted";
+
 interface ConfigState {
   cdnDomain: string;
   // True when cdnDomain serves private content via time-bounded signed URLs
@@ -15,6 +17,13 @@ interface ConfigState {
   // must be hidden. Defaults to false so unknown / older servers behave like
   // the managed-cloud case.
   workspaceCreationDisabled: boolean;
+  // Whether the server exposes the additive project-permission overlay.
+  // Unknown/older servers default to false so its settings screens stay hidden.
+  projectPermissionsEnabled: boolean;
+  // Explicit rollout state keeps reader enforcement and mutation availability
+  // separate. Older servers only expose the boolean and retain their previous
+  // fully-enabled behavior through the fallback in setAuthConfig.
+  projectPermissionRolloutPhase: ProjectPermissionRolloutPhase;
   // Self-host-only gate for the Git provider integration (Forgejo / Gitea /
   // GitLab). When false the whole Settings → Integrations "Git providers"
   // section is hidden. Defaults to false so unknown / older servers and the
@@ -36,18 +45,13 @@ interface ConfigState {
   // Older handlers accepted the unknown field and returned success while
   // dropping it, so absent must fail closed.
   agentConversationStartersSupported: boolean;
-  // Whether POST /api/issues atomically persists custom-property values.
-  // Older servers silently drop the field, so absent must fail closed.
-  issueCreatePropertiesSupported: boolean;
-  // Whether deleting a comment keeps its replies (#8296). Older servers
-  // deleted the replies too, so absent must fail closed: the client then
-  // promises nothing about replies and uses the legacy delete route.
-  commentDeleteKeepRepliesSupported: boolean;
   setCdnConfig: (config: { cdnDomain: string; cdnSigned?: boolean }) => void;
   setAuthConfig: (config: {
     allowSignup: boolean;
     googleClientId?: string;
     workspaceCreationDisabled?: boolean;
+    projectPermissionsEnabled?: boolean;
+    projectPermissionRolloutPhase?: ProjectPermissionRolloutPhase;
     vcsIntegrationAvailable?: boolean;
   }) => void;
   setDaemonConfig: (config: {
@@ -56,10 +60,9 @@ interface ConfigState {
   }) => void;
   setFeatureFlags: (flags?: Record<string, boolean>) => void;
   setServerVersion: (version?: string) => void;
+  setClientVersion: (version?: string) => void;
   setLocalWorktreeSupported: (supported?: boolean) => void;
   setAgentConversationStartersSupported: (supported?: boolean) => void;
-  setIssueCreatePropertiesSupported: (supported?: boolean) => void;
-  setCommentDeleteKeepRepliesSupported: (supported?: boolean) => void;
 }
 
 export const configStore = createStore<ConfigState>((set) => ({
@@ -70,32 +73,39 @@ export const configStore = createStore<ConfigState>((set) => ({
   daemonServerUrl: "",
   daemonAppUrl: "",
   workspaceCreationDisabled: false,
+  projectPermissionsEnabled: false,
+  projectPermissionRolloutPhase: "off",
   vcsIntegrationAvailable: false,
   featureFlags: {},
   serverVersion: "",
+  clientVersion: "",
   localWorktreeSupported: false,
   agentConversationStartersSupported: false,
-  issueCreatePropertiesSupported: false,
-  commentDeleteKeepRepliesSupported: false,
   setCdnConfig: ({ cdnDomain, cdnSigned = false }) => set({ cdnDomain, cdnSigned }),
   setAuthConfig: ({
     allowSignup,
     googleClientId = "",
     workspaceCreationDisabled = false,
     vcsIntegrationAvailable = false,
-  }) => set({ allowSignup, googleClientId, workspaceCreationDisabled, vcsIntegrationAvailable }),
+    projectPermissionsEnabled = false,
+    projectPermissionRolloutPhase,
+  }) => set({
+    allowSignup,
+    googleClientId,
+    workspaceCreationDisabled,
+    vcsIntegrationAvailable,
+    projectPermissionsEnabled,
+    projectPermissionRolloutPhase: projectPermissionRolloutPhase ?? (projectPermissionsEnabled ? "restricted" : "off"),
+  }),
   setDaemonConfig: ({ daemonServerUrl = "", daemonAppUrl = "" }) =>
     set({ daemonServerUrl, daemonAppUrl }),
   setFeatureFlags: (flags = {}) => set({ featureFlags: { ...flags } }),
   setServerVersion: (version = "") => set({ serverVersion: version }),
+  setClientVersion: (version = "") => set({ clientVersion: version }),
   setLocalWorktreeSupported: (supported = false) =>
     set({ localWorktreeSupported: supported === true }),
   setAgentConversationStartersSupported: (supported = false) =>
     set({ agentConversationStartersSupported: supported === true }),
-  setIssueCreatePropertiesSupported: (supported = false) =>
-    set({ issueCreatePropertiesSupported: supported === true }),
-  setCommentDeleteKeepRepliesSupported: (supported = false) =>
-    set({ commentDeleteKeepRepliesSupported: supported === true }),
 }));
 
 export function useConfigStore(): ConfigState;
@@ -116,4 +126,9 @@ export function useFeatureEnabled(key: string, defaultValue = false): boolean {
   return useConfigStore((state) =>
     featureFlagEnabled(state.featureFlags, key, defaultValue),
   );
+}
+
+/** Read-only rollout adapters keep view packages independent of config-store internals. */
+export function useProjectPermissionsEnabled(): boolean {
+  return useConfigStore((state) => state.projectPermissionsEnabled);
 }

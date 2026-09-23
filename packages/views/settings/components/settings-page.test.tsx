@@ -73,6 +73,10 @@ beforeEach(() => {
   layout.compact = true;
   navigationState.search = "";
   configStore.getState().setFeatureFlags({});
+  configStore.getState().setAuthConfig({
+    allowSignup: true,
+    projectPermissionsEnabled: false,
+  });
   replace.mockClear();
 });
 

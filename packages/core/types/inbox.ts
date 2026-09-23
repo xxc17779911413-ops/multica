@@ -21,14 +21,12 @@ export type InboxItemType =
   | "reaction_added"
   | "quick_create_done"
   | "quick_create_failed"
+  | "task_access_request"
+  | "task_access_granted"
   // Quick create whose outcome could not be verified. Distinct from
   // quick_create_failed because it must NOT be rendered with failure framing:
   // the issue may actually have been created.
-  | "quick_create_unconfirmed"
-  // System notifications are intentionally issue-less. Keep them in the
-  // same Inbox model so read/archive/realtime behavior remains consistent.
-  | "autopilot_paused"
-  | "autopilot_quota_exceeded";
+  | "quick_create_unconfirmed";
 
 /**
  * One workspace's unread inbox count in the cross-workspace summary

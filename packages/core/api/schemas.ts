@@ -740,6 +740,10 @@ export interface AppConfigResponse {
   daemon_server_url?: string;
   daemon_app_url?: string;
   workspace_creation_disabled?: boolean;
+  /** Whether the backend project-permission overlay is enabled. */
+  project_permissions_enabled?: boolean;
+  /** Staged authorization rollout state. Absent on older servers. */
+  project_permission_rollout_phase?: "off" | "shadow" | "reader" | "writer" | "restricted";
   /** Whether this deployment offers the self-hosted Git provider integration
    * (self-host only; off on the managed cloud). Absent/false hides the whole
    * Settings → Integrations "Git providers" section. */
@@ -1001,12 +1005,12 @@ export const AppConfigSchema = z.object({
   daemon_server_url: OptionalStringSchema,
   daemon_app_url: OptionalStringSchema,
   workspace_creation_disabled: BooleanWithDefaultSchema(false).optional(),
+  project_permissions_enabled: BooleanWithDefaultSchema(false).optional(),
+  project_permission_rollout_phase: z.enum(["off", "shadow", "reader", "writer", "restricted"]).optional(),
   vcs_integration_available: BooleanWithDefaultSchema(false).optional(),
   feature_flags: FeatureFlagsSchema,
   local_worktree_supported: BooleanWithDefaultSchema(false),
   agent_conversation_starters_supported: BooleanWithDefaultSchema(false),
-  issue_create_properties_supported: BooleanWithDefaultSchema(false),
-  comment_delete_keep_replies_supported: BooleanWithDefaultSchema(false),
   server_version: OptionalStringSchema,
 }).loose();
 
@@ -1385,6 +1389,10 @@ const ProjectSchema = z.object({
   issue_count: z.number().default(0),
   done_count: z.number().default(0),
   resource_count: z.number().default(0),
+  // 2026-08-28 coder(lq): Keep role metadata optional for older self-hosted servers.
+  current_user_role: z.string().nullable().default(null),
+  // 2026-09-07 coder(lq): Default safely for older servers that omit capability metadata.
+  can_delete: z.boolean().optional().default(false),
 }).loose();
 
 const SearchProjectResultSchema = ProjectSchema.extend({
@@ -3565,3 +3573,282 @@ export const RuntimeProfileSchema = z
     runtime_type: profile.runtime_type || profile.protocol_family,
   }));
 export const RuntimeProfileListSchema = z.array(RuntimeProfileSchema);
+
+export const ProjectMemberSchema = z.object({
+  project_id: z.string(),
+  user_id: z.string(),
+  role: z.string(),
+}).loose();
+
+export const ProjectMembersResponseSchema = z.object({
+  members: z.array(ProjectMemberSchema).default([]),
+  total: z.number().default(0),
+  // 2026-08-27 coder(lq): Default closed when an older or malformed server
+  // omits this capability bit, so the client never exposes an unusable action.
+  can_manage: z.boolean().default(false),
+}).loose();
+
+export type ProjectMembersResponse = z.infer<typeof ProjectMembersResponseSchema>;
+
+export const EMPTY_PROJECT_MEMBERS_RESPONSE: ProjectMembersResponse = {
+  members: [],
+  total: 0,
+  can_manage: false,
+};
+
+export const ProjectPermissionRoleSchema = z.object({
+  id: z.string(),
+  workspace_id: z.string(),
+  key: z.string(),
+  name: z.string(),
+  description: z.string().default(""),
+  is_system: z.boolean().default(false),
+  permissions: z.array(z.string()).default([]),
+}).loose();
+
+export const ProjectPermissionRolesResponseSchema = z.object({
+  roles: z.array(ProjectPermissionRoleSchema).default([]),
+}).loose();
+
+export type ProjectPermissionRolesResponse = z.infer<typeof ProjectPermissionRolesResponseSchema>;
+
+export const ProjectAccessGrantSchema = z.object({
+  id: z.string().default(""),
+  workspace_id: z.string().default(""),
+  project_id: z.string().default(""),
+  issue_id: z.string().optional(),
+  subject_type: z.enum(["user", "role", "organization", "everyone"]),
+  subject_id: z.string().optional(),
+  role: z.string().optional(),
+  permission: z.string().optional(),
+  source: z.string().default("manual"),
+  granted_by: z.string().optional(),
+  created_at: z.string().optional(),
+}).loose();
+
+export const ProjectAccessGrantsResponseSchema = z.object({
+  grants: z.array(ProjectAccessGrantSchema).default([]),
+  total: z.number().default(0),
+  project_id: z.string().optional(),
+}).loose();
+
+export type ProjectAccessGrantsResponse = z.infer<typeof ProjectAccessGrantsResponseSchema>;
+export const EMPTY_PROJECT_ACCESS_GRANTS_RESPONSE: ProjectAccessGrantsResponse = { grants: [], total: 0 };
+
+const PermissionResourceScopeSchema = z.enum(["workspace", "project", "task"]);
+
+export const TaskPermissionRoleSchema = z.object({
+  id: z.string(),
+  workspace_id: z.string(),
+  key: z.string(),
+  name: z.string(),
+  description: z.string().default(""),
+  is_system: z.boolean().default(false),
+  scope: z.literal("task"),
+  permissions: z.array(z.string()).default([]),
+}).loose();
+
+export const TaskPermissionRolesResponseSchema = z.object({
+  scope: z.literal("task"),
+  roles: z.array(TaskPermissionRoleSchema).default([]),
+}).loose();
+
+export const EMPTY_TASK_PERMISSION_ROLES_RESPONSE = { scope: "task" as const, roles: [] };
+
+export const IssueAccessControlGrantSchema = z.object({
+  subject_type: z.enum(["user", "organization", "everyone"]),
+  subject_id: z.string().optional(),
+  role: z.string(),
+  scope: z.literal("task"),
+  expires_at: z.string().optional(),
+}).loose();
+
+const IssueAccessControlDerivedGrantSchema = z.object({
+  subject_type: z.enum(["user", "organization", "everyone"]),
+  subject_id: z.string().optional(),
+  role: z.string(),
+  source: z.string(),
+  // Defaulted for the same reason as the array itself.
+  reason: z.string().default(""),
+}).loose();
+
+export const IssueAccessControlSchema = z.object({
+  workspace_id: z.string(),
+  issue_id: z.string(),
+  project_id: z.string().optional(),
+  scope: z.literal("task"),
+  project_access_mode: z.enum(["inherit", "restricted"]),
+  policy_version: z.number(),
+  grants: z.array(IssueAccessControlGrantSchema).default([]),
+  // Defaulted so a backend that predates this field still parses.
+  derived_grants: z.array(IssueAccessControlDerivedGrantSchema).default([]),
+}).loose();
+
+const EffectiveAccessResourceRefSchema = z.object({
+  scope: PermissionResourceScopeSchema,
+  id: z.string(),
+}).loose();
+
+export const EffectiveTaskPermissionSourceSchema = z.object({
+  permission: z.string(),
+  source: z.string(),
+  underlying_source: z.string().optional(),
+  subject_type: z.string().optional(),
+  subject_id: z.string().optional(),
+  role: z.string().optional(),
+  scope: PermissionResourceScopeSchema.optional(),
+  grant_id: z.string().optional(),
+  grant_source: z.string().optional(),
+  granted_by: z.string().optional(),
+  origin_kind: z.string().optional(),
+  origin_id: z.string().optional(),
+  expires_at: z.string().optional(),
+  source_resource: EffectiveAccessResourceRefSchema,
+  underlying_resource: EffectiveAccessResourceRefSchema.optional(),
+  target_resource: EffectiveAccessResourceRefSchema,
+  policy_version: z.number(),
+}).loose();
+
+export const EffectiveIssueAccessSchema = z.object({
+  workspace_id: z.string(),
+  issue_id: z.string(),
+  project_id: z.string().optional(),
+  project_access_mode: z.enum(["inherit", "restricted"]),
+  policy_version: z.number(),
+  permissions: z.array(z.string()).default([]),
+  sources: z.array(EffectiveTaskPermissionSourceSchema).default([]),
+}).loose();
+
+export const IssueAccessControlPreviewSchema = z.object({
+  before: IssueAccessControlSchema,
+  after: IssueAccessControlSchema,
+  subjects_losing_access: z.array(z.string()).default([]),
+  subjects_with_other_source: z.array(z.string()).default([]),
+  affected_effects: z.array(z.string()).default([]),
+}).loose();
+
+export const IssueAccessRequestSchema = z.object({
+  id: z.string(),
+  workspace_id: z.string(),
+  issue_id: z.string(),
+  requester_user_id: z.string(),
+  requested_role: z.string(),
+  reason: z.string().optional(),
+  status: z.enum(["pending", "approved", "rejected", "cancelled", "expired"]),
+  reviewer_user_id: z.string().optional(),
+  review_comment: z.string().optional(),
+  expires_at: z.string().optional(),
+  reviewed_at: z.string().optional(),
+  created_at: z.string().default(""),
+  updated_at: z.string().default(""),
+}).loose();
+
+export const IssueAccessRequestsResponseSchema = z.object({
+  items: z.array(IssueAccessRequestSchema).default([]),
+}).loose();
+
+export const IssueAccessRequestTargetSchema = z.object({
+  id: z.string(),
+  identifier: z.string(),
+}).loose();
+
+export const ProjectPermissionReportRowSchema = z.object({
+  scope: z.enum(["project", "issue"]),
+  project_id: z.string(),
+  project_title: z.string(),
+  issue_id: z.string().optional(),
+  issue_title: z.string().optional(),
+  user_id: z.string(),
+  user_name: z.string(),
+  user_email: z.string(),
+  subject_type: z.enum(["user", "role", "organization", "everyone"]),
+  subject_id: z.string().optional(),
+  workspace_role: z.string().optional(),
+  project_role: z.string().optional(),
+  role_scope: PermissionResourceScopeSchema.optional(),
+  permission: z.string(),
+  source: z.string(),
+  grant_id: z.string().optional(),
+  granted_by: z.string().optional(),
+  created_at: z.string().optional(),
+  expires_at: z.string().optional(),
+  source_resource_scope: PermissionResourceScopeSchema.optional(),
+  source_resource_id: z.string().optional(),
+  project_access_mode: z.enum(["inherit", "restricted"]).optional(),
+  policy_version: z.number().optional(),
+  inherited_from_project: z.boolean(),
+}).loose();
+
+export const ProjectPermissionReportResponseSchema = z.object({
+  rows: z.array(ProjectPermissionReportRowSchema).default([]),
+  total: z.number().default(0),
+  limit: z.number().default(0),
+  offset: z.number().default(0),
+}).loose();
+
+export const EMPTY_PROJECT_PERMISSION_REPORT_RESPONSE = {
+  rows: [],
+  total: 0,
+  limit: 0,
+  offset: 0,
+};
+
+export const ProjectAuthorizationOrganizationSchema = z.object({
+  id: z.string(),
+  workspace_id: z.string(),
+  provider: z.string().default(""),
+  external_id: z.string().default(""),
+  name: z.string().default(""),
+  parent_id: z.string().optional(),
+  status: z.string().default("active"),
+}).loose();
+
+export const ProjectAuthorizationOrganizationMemberSchema = z.object({
+  organization_id: z.string(),
+  user_id: z.string(),
+  name: z.string().default(""),
+  email: z.string().default(""),
+  avatar_url: z.string().optional(),
+  workspace_role: z.string().default("member"),
+  has_logged_in: z.boolean().optional().default(false),
+}).loose();
+
+export const ProjectAuthorizationOrganizationsResponseSchema = z.object({
+  organizations: z.array(ProjectAuthorizationOrganizationSchema).default([]),
+  members: z.array(ProjectAuthorizationOrganizationMemberSchema).default([]),
+  total: z.number().default(0),
+  member_total: z.number().default(0),
+}).loose();
+
+export type ProjectAuthorizationOrganizationsResponse = z.infer<typeof ProjectAuthorizationOrganizationsResponseSchema>;
+
+export const ProjectAuthorizationImportPreviewSchema = z.object({
+  kind: z.enum(["organizations", "members"]),
+  organizations: z.array(z.object({ external_id: z.string(), name: z.string(), parent_external_id: z.string().optional(), status: z.string() }).loose()).optional(),
+  members: z.array(z.object({ external_id: z.string(), name: z.string(), email: z.string().optional(), phone: z.string().optional(), organization_external_id: z.string(), status: z.string() }).loose()).optional(),
+  errors: z.array(z.string()).default([]),
+  warnings: z.array(z.string()).default([]),
+  rows: z.number().default(0),
+}).loose();
+export type ProjectAuthorizationImportPreview = z.infer<typeof ProjectAuthorizationImportPreviewSchema>;
+export const ProjectAuthorizationImportResultSchema = z.object({
+  organizations_created: z.number().default(0), organizations_updated: z.number().default(0),
+  members_created: z.number().default(0), members_updated: z.number().default(0),
+  disabled: z.number().default(0), unmatched: z.array(z.string()).default([]),
+  users_created: z.number().default(0), workspace_members_created: z.number().default(0),
+}).loose();
+export type ProjectAuthorizationImportResult = z.infer<typeof ProjectAuthorizationImportResultSchema>;
+
+export const ProjectAuthorizationDingTalkSyncResultSchema = z.object({
+  organizations_created: z.number().default(0),
+  organizations_updated: z.number().default(0),
+  organizations_disabled: z.number().default(0),
+  members_created: z.number().default(0),
+  members_removed: z.number().default(0),
+  users_created: z.number().default(0),
+  users_matched: z.number().default(0),
+  workspace_members_created: z.number().default(0),
+  unmatched: z.array(z.string()).default([]),
+}).loose();
+export type ProjectAuthorizationDingTalkSyncResult = z.infer<typeof ProjectAuthorizationDingTalkSyncResultSchema>;
+

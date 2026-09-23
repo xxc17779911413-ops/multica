@@ -79,6 +79,7 @@ import {
 import { useConfigStore } from "@multica/core/config";
 import type { LocalDirectoryExecutionMode } from "@multica/core/types";
 import { LocalDirectoryModeOptions } from "../projects/components/local-directory-mode-dialog";
+import { ProjectPermissionPicker, type ProjectPermissionSelection } from "../projects/components/project-permission-picker";
 
 /**
  * Builds the resource_ref for a local directory attached during project
@@ -171,15 +172,13 @@ export function CreateProjectModal({ onClose }: { onClose: () => void }) {
   // created. Stored as URLs (not full ProjectResource rows) — they're not
   // persisted until handleSubmit fires the createProjectResource calls.
   const [selectedRepos, setSelectedRepos] = useState<string[]>([]);
-  // Checkout ref per selected repo URL, absent when the repo starts from its
-  // default branch. Keyed by URL rather than folded into selectedRepos so
-  // toggling a repo off and on again does not silently drop the ref.
-  const [repoRefs, setRepoRefs] = useState<Record<string, string>>({});
   const [repoPopoverOpen, setRepoPopoverOpen] = useState(false);
   const [repoSearch, setRepoSearch] = useState("");
   const [customRepoUrl, setCustomRepoUrl] = useState("");
-  const [customRepoRef, setCustomRepoRef] = useState("");
-  const [editingRefFor, setEditingRefFor] = useState<string | null>(null);
+  // 2026-08-28 coder(lq): Keep creation-time grants separate from the native
+  // form fields until submit; the server persists them atomically with the
+  // project row.
+  const [projectPermissions, setProjectPermissions] = useState<ProjectPermissionSelection[]>([]);
   const workspaceRepos = workspace?.repos ?? [];
   const repoQuery = repoSearch.trim().toLowerCase();
   const filteredWorkspaceRepos = workspaceRepos.filter((repo) =>
@@ -389,17 +388,31 @@ export function CreateProjectModal({ onClose }: { onClose: () => void }) {
         due_date: dueDate || undefined,
         // Server attaches these in the same transaction as the project.
         resources,
+        access_grants: projectPermissions.map((selection) => ({
+          subject_type: selection.subjectType,
+          ...(selection.subjectId ? { subject_id: selection.subjectId } : {}),
+          ...(selection.role ? { role: selection.role } : {}),
+          ...(selection.permission ? { permission: selection.permission } : {}),
+        })),
       });
       clearDraft();
       onClose();
       toast.success(t(($) => $.create_project.toast_created));
       router.push(wsPaths.projectDetail(project.id));
     } catch (err) {
-      toast.error(
-        err instanceof Error && err.message
-          ? err.message
-          : t(($) => $.create_project.toast_failed),
-      );
+      const code = errorCode(err);
+      const message =
+        code === "project_permission_migration_required"
+          ? t(($) => $.create_project.toast_permission_migration_required)
+          : code === "project_permission_unavailable"
+            ? t(($) => $.create_project.toast_permission_unavailable)
+            : err instanceof Error &&
+                err.message === "failed to initialize project permissions"
+              ? t(($) => $.create_project.toast_permission_init_failed)
+              : err instanceof Error && err.message
+                ? err.message
+                : t(($) => $.create_project.toast_failed);
+      toast.error(message);
     } finally {
       setSubmitting(false);
     }
@@ -1058,6 +1071,13 @@ export function CreateProjectModal({ onClose }: { onClose: () => void }) {
               )}
             </PopoverContent>
           </Popover>
+
+          <ProjectPermissionPicker
+            members={members}
+            workspaceId={wsId}
+            value={projectPermissions}
+            onChange={setProjectPermissions}
+          />
 
           {/* Overflow — always the last child so it stays at the end of the
               wrap flow. Only rendered while a date is still collapsible; when

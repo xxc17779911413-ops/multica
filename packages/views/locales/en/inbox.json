@@ -71,16 +71,16 @@
     "new_comment": "New comment",
     "mentioned": "Mentioned",
     "review_requested": "Review requested",
-    "task_completed": "Run completed",
-    "task_failed": "Run failed",
+    "task_completed": "Task completed",
+    "task_failed": "Task failed",
     "agent_blocked": "Agent blocked",
     "agent_completed": "Agent completed",
     "reaction_added": "Reacted",
     "quick_create_done": "Created with agent",
     "quick_create_failed": "Create with agent failed",
-    "quick_create_unconfirmed": "Create with agent unconfirmed",
-    "autopilot_paused": "Autopilot paused",
-    "autopilot_quota_exceeded": "Autopilot run limit reached"
+    "task_access_request": "Task access request",
+    "task_access_granted": "Task access granted",
+    "quick_create_unconfirmed": "Create with agent unconfirmed"
   },
   "labels": {
     "set_status_to": "Set status to",

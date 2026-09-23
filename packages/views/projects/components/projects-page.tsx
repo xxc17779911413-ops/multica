@@ -109,6 +109,7 @@ import { matchesPinyin } from "../../editor/extensions/pinyin-match";
 import { useFormatRelativeDate } from "./labels";
 import { ProjectStatusBadge, ProjectPriorityBadge } from "./project-badge";
 import { ProjectLeadPicker } from "./project-lead-picker";
+import { ProjectPermissionsDialog } from "./project-permissions-dialog";
 import { PAGE_GUTTER, PAGE_TOOLBAR } from "../../layout/page-header";
 import { cn } from "@multica/ui/lib/utils";
 
@@ -295,6 +296,16 @@ function ProjectRowActions({
         </DropdownMenuContent>
       </DropdownMenu>
 
+      {/* 2026-08-28 coder(lq): Keep the list action on the same authorization dialog as project detail. */}
+      {permissionsOpen && (
+        <ProjectPermissionsDialog
+          projectId={project.id}
+          open={permissionsOpen}
+          onOpenChange={setPermissionsOpen}
+          hideTrigger
+        />
+      )}
+
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -331,6 +342,42 @@ function ProjectRowActions({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </>
+  );
+}
+
+function ProjectAuthorizationCell({ project }: { project: Project }) {
+  const { t } = useT("projects");
+  const [open, setOpen] = useState(false);
+
+  return (
+    <>
+      <ListGridCell
+        className="justify-start"
+        onClick={stopRowNavigation}
+        onAuxClick={stopRowNavigation}
+      >
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-7 gap-1.5 px-2 text-caption"
+          aria-label={t(($) => $.permissions.authorize)}
+          title={t(($) => $.permissions.authorize)}
+          onClick={() => setOpen(true)}
+        >
+          <ShieldCheck className="size-3.5" />
+          <span>{t(($) => $.permissions.authorize)}</span>
+        </Button>
+      </ListGridCell>
+      {open && (
+        <ProjectPermissionsDialog
+          projectId={project.id}
+          open={open}
+          onOpenChange={setOpen}
+          hideTrigger
+        />
+      )}
     </>
   );
 }
@@ -449,6 +496,22 @@ function ProjectTableRow({
         <ListGridCell className="hidden px-0 @2xl:flex" />
       )}
 
+      {isColVisible("role") ? (
+        <ListGridCell className="hidden text-body @2xl:flex">
+          {project.current_user_role === "owner"
+            ? t(($) => $.permissions.role_owner)
+            : project.current_user_role === "manager"
+              ? t(($) => $.permissions.role_manager)
+              : project.current_user_role === "member"
+                ? t(($) => $.permissions.role_member)
+                : project.current_user_role === "viewer"
+                  ? t(($) => $.permissions.role_viewer)
+                  : project.current_user_role || "—"}
+        </ListGridCell>
+      ) : (
+        <ListGridCell className="hidden px-0 @2xl:flex" />
+      )}
+
       {isColVisible("issues") ? (
         <ListGridCell className="hidden justify-end font-mono text-caption tabular-nums text-muted-foreground @2xl:flex">
           {project.issue_count}
@@ -456,6 +519,26 @@ function ProjectTableRow({
       ) : (
         <ListGridCell className="hidden px-0 @2xl:flex" />
       )}
+
+      {isColVisible("creator") ? (
+        <ListGridCell className="hidden @2xl:flex">
+          {project.created_by ? (
+            <span className="flex min-w-0 items-center gap-1.5">
+              <ActorAvatar actorType="member" actorId={project.created_by} size="sm" enableHoverCard />
+              <span className="min-w-0 truncate text-caption text-muted-foreground">
+                {getActorName("member", project.created_by) ?? "—"}
+              </span>
+            </span>
+          ) : (
+            <span className="text-caption text-faint-foreground">—</span>
+          )}
+        </ListGridCell>
+      ) : (
+        <ListGridCell className="hidden px-0 @2xl:flex" />
+      )}
+
+      {/* 2026-08-29 coder(lq): Keep authorization visible beside the creator instead of burying it in the row menu. */}
+      <ProjectAuthorizationCell project={project} />
 
       {isColVisible("created") ? (
         <ListGridCell className="hidden whitespace-nowrap text-caption tabular-nums text-muted-foreground @2xl:flex">
@@ -467,7 +550,12 @@ function ProjectTableRow({
 
       <ListGridCell className="justify-end px-0">
         <span onClick={stopRowNavigation} onAuxClick={stopRowNavigation} className="flex items-center">
-          <ProjectRowActions project={project} pinned={pinned} canDelete={canDelete} />
+          <ProjectRowActions
+            project={project}
+            pinned={pinned}
+            canDelete={canDelete}
+            showAuthorize={false}
+          />
         </span>
       </ListGridCell>
     </ListGridRow>
@@ -1255,12 +1343,13 @@ export function ProjectsPage() {
                     key={project.id}
                     project={project}
                     pinned={pinnedProjectIds.has(project.id)}
-                    canDelete={isWorkspaceAdmin}
+                    canDelete={Boolean(project.can_delete)}
                     isColVisible={isColVisible}
                     selected={selectedIds.has(project.id)}
                     onToggleSelect={() => toggleSelected(project.id)}
                     rowHref={wsPaths.projectDetail(project.id)}
                     rowLink={rowLink}
+                    getActorName={getActorName}
                   />
                 ))}
               </ListGrid>
@@ -1276,7 +1365,8 @@ export function ProjectsPage() {
                     key={project.id}
                     project={project}
                     pinned={pinnedProjectIds.has(project.id)}
-                    canDelete={isWorkspaceAdmin}
+                    canDelete={Boolean(project.can_delete)}
+                    getActorName={getActorName}
                   />
                 ))}
               </div>
@@ -1286,7 +1376,7 @@ export function ProjectsPage() {
           <ProjectBatchToolbar
             rows={selectedProjects}
             pinnedIds={pinnedProjectIds}
-            canDelete={isWorkspaceAdmin}
+            canDelete={selectedProjects.every((project) => Boolean(project.can_delete))}
             onClear={() => setSelectedIds(new Set())}
           />
         </>

@@ -18,9 +18,15 @@ export interface Project {
   due_date: string | null;
   created_at: string;
   updated_at: string;
+  /** User who created the project; null for projects created before attribution was added. */
+  created_by: string | null;
   issue_count: number;
   done_count: number;
   resource_count: number;
+  /** Explicit role on this project for the signed-in user; omitted by legacy backends. */
+  current_user_role?: string | null;
+  /** Whether the signed-in user may delete this project. */
+  can_delete?: boolean;
 }
 
 export interface CreateProjectRequest {
@@ -36,6 +42,15 @@ export interface CreateProjectRequest {
   // Resources to attach in the same transaction as the project. Server returns
   // 4xx (and rolls back) if any one is invalid or duplicate.
   resources?: CreateProjectResourceRequest[];
+  /** Optional project-level grants persisted atomically with project creation. */
+  access_grants?: CreateProjectAccessGrantRequest[];
+}
+
+export interface CreateProjectAccessGrantRequest {
+  subject_type: ProjectAccessGrantSubjectType;
+  subject_id?: string;
+  role?: string;
+  permission?: ProjectPermissionReportPermission | string;
 }
 
 export interface UpdateProjectRequest {

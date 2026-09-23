@@ -18,9 +18,14 @@ import {
   Blocks,
   CreditCard,
   Server,
+  FlaskConical,
+  ListTodo,
+  MessageCircle,
+  RotateCcw,
+  ShieldCheck,
 } from "lucide-react";
 import { useCurrentWorkspace } from "@multica/core/paths";
-import { useFeatureEnabled } from "@multica/core/config";
+import { useFeatureEnabled, useProjectPermissionsEnabled } from "@multica/core/config";
 import {
   BILLING_WORKSPACE_SUBSCRIPTIONS_FLAG,
   PLUGINS_V1_FLAG,
@@ -44,6 +49,9 @@ import { KeyboardShortcutsTab } from "./keyboard-shortcuts-tab";
 import { PluginsTab } from "./plugins-tab";
 import { McpTab } from "./mcp-tab";
 import { BillingTab } from "./billing-tab";
+import { ProjectPermissionsTab } from "./project-permissions-tab";
+import { ProjectPermissionRolesTab } from "./project-permission-roles-tab";
+import { ProjectAuthorizationOrganizationsTab } from "./project-authorization-organizations-tab";
 import { CollapsedNavTrigger } from "../../layout/page-header";
 import { useT } from "../../i18n";
 
@@ -67,6 +75,7 @@ export function SettingsPage({ extraDeviceTabs = [] }: SettingsPageProps = {}) {
     useCurrentWorkspace()?.name ?? t(($) => $.page.workspace_fallback);
   const navigation = useNavigation();
   const pluginsEnabled = useFeatureEnabled(PLUGINS_V1_FLAG, false);
+  const projectPermissionsEnabled = useProjectPermissionsEnabled();
   const billingEnabled = useFeatureEnabled(
     BILLING_WORKSPACE_SUBSCRIPTIONS_FLAG,
     false,
@@ -140,6 +149,31 @@ export function SettingsPage({ extraDeviceTabs = [] }: SettingsPageProps = {}) {
                 t(($) => $.page.tabs.billing),
                 CreditCard,
                 <BillingTab />,
+              ),
+            ]
+          : []),
+        ...(projectPermissionsEnabled
+          ? [
+              entry(
+                "project-permissions",
+                t(($) => $.page.tabs.project_permissions),
+                ShieldCheck,
+                <ProjectPermissionsTab />,
+                true,
+              ),
+              entry(
+                "project-permission-roles",
+                t(($) => $.page.tabs.project_permission_roles),
+                ShieldCheck,
+                <ProjectPermissionRolesTab />,
+                true,
+              ),
+              entry(
+                "project-authorization-organizations",
+                t(($) => $.page.tabs.project_authorization_organizations),
+                Users,
+                <ProjectAuthorizationOrganizationsTab />,
+                true,
               ),
             ]
           : []),
@@ -228,7 +262,14 @@ export function SettingsPage({ extraDeviceTabs = [] }: SettingsPageProps = {}) {
   ];
   const location = resolveSettingsLocation(navigation.searchParams);
   const candidate =
-    location.tab === "billing" && !billingEnabled ? "workspace" : location.tab;
+    location.tab === "billing" && !billingEnabled
+      ? "workspace"
+      : (location.tab === "project-permissions" ||
+            location.tab === "project-permission-roles" ||
+            location.tab === "project-authorization-organizations") &&
+          !projectPermissionsEnabled
+        ? "workspace"
+        : location.tab;
   const active =
     groups
       .flatMap((group) => group.entries)

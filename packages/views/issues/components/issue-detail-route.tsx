@@ -6,6 +6,8 @@ import { useWorkspaceId } from "@multica/core/hooks";
 import { useWorkspacePaths } from "@multica/core/paths";
 import { useNavigation } from "../../navigation";
 import { IssueDetail, IssueDetailSkeleton, IssueNotFound } from "./issue-detail";
+import { useWorkspaceTaskVisibility } from "../surface/visibility-context";
+import { RestrictedIssueAccessFallback } from "./restricted-issue-access";
 
 interface IssueDetailRouteProps {
   /**
@@ -76,18 +78,35 @@ function useCommentHighlightHash(): { hash: string; commentId?: string } {
  */
 export function IssueDetailRoute({ routeId, onDelete }: IssueDetailRouteProps) {
   const wsId = useWorkspaceId();
-  const { canonicalId, issue, isResolving, notFound } = useCanonicalIssue(wsId, routeId);
+  const { includeWorkspaceOwned, ready: visibilityReady } =
+    useWorkspaceTaskVisibility();
+  const { canonicalId, issue, isResolving, notFound } = useCanonicalIssue(
+    wsId,
+    routeId,
+    includeWorkspaceOwned,
+  );
   const highlight = useCommentHighlightHash();
 
   useCanonicalIssueUrl(routeId, issue?.identifier, highlight.hash);
 
-  if (isResolving) return <IssueDetailSkeleton />;
+  if (!visibilityReady || isResolving) return <IssueDetailSkeleton />;
 
   // Render not-found here rather than handing the unresolved segment down.
   // `IssueDetail` would mount a second observer on the query that just failed,
   // refetch it, and restart this component's resolve/remount cycle — an
   // unbounded request loop that never settles. See `CanonicalIssue.notFound`.
-  if (notFound || !canonicalId) return <IssueNotFound showBackLink={!onDelete} />;
+  // The task might still exist — just not for this reader — in which case the
+  // fallback offers the access request instead of reporting a deletion.
+  if (notFound) {
+    return (
+      <RestrictedIssueAccessFallback
+        targetId={routeId}
+        loading={<IssueDetailSkeleton />}
+        notFound={<IssueNotFound showBackLink={!onDelete} />}
+      />
+    );
+  }
+  if (!canonicalId) return <IssueNotFound showBackLink={!onDelete} />;
 
   return (
     <IssueDetail

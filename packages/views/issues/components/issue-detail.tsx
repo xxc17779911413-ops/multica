@@ -63,21 +63,13 @@ import { PropRow } from "../../common/prop-row";
 import { PropertyIcon } from "../../common/property-icon";
 import type { Attachment, Issue, IssueProperty, IssueStatus, IssueStatusCategory, IssuePriority, TimelineEntry, UpdateIssueRequest } from "@multica/core/types";
 import { contentReferencesAttachment } from "@multica/core/types";
-import { isBuiltInIssueStatus } from "@multica/core/issue-statuses";
-import { commentLandingTarget } from "@multica/core/issues/comment-deletion";
+import { STATUS_CONFIG } from "@multica/core/issues/config";
 import { formatDateOnly, isPastDateOnly } from "@multica/core/issues/date";
 import { useUpdateIssue } from "@multica/core/issues/mutations";
 import { toast } from "sonner";
 import { errorCode } from "@multica/core/api";
-import { StatusIcon } from "./status-icon";
-import { PriorityIcon } from "./priority-icon";
-import { StatusPicker } from "./pickers/status-picker";
-import { PriorityPicker } from "./pickers/priority-picker";
-import { StagePicker, maxSiblingStage } from "./pickers/stage-picker";
-import { StartDatePicker } from "./pickers/start-date-picker";
-import { DueDatePicker } from "./pickers/due-date-picker";
-import { AssigneePicker } from "./pickers/assignee-picker";
-import { LabelPicker } from "./pickers/label-picker";
+import { StatusIcon, PriorityIcon, StatusPicker, PriorityPicker, StagePicker, StartDatePicker, DueDatePicker, AssigneePicker, LabelPicker } from ".";
+import { maxSiblingStage } from "./pickers/stage-picker";
 import { CustomPropertyValueEditor, CustomPropertyValueDisplay } from "./pickers/custom-property-picker";
 import { Switch } from "@multica/ui/components/ui/switch";
 import { IssueActionsDropdown, useIssueActions, IssueActionsContextMenu, IssueContextMenuProvider } from "../actions";
@@ -85,6 +77,7 @@ import { LabelChip } from "../../labels/label-chip";
 import { IssueAgentActivityIndicator } from "./issue-agent-activity-indicator";
 import { SubIssuesAgentWorkingChip } from "./sub-issues-agent-working-chip";
 import { ProjectPicker } from "../../projects/components/project-picker";
+import { IssueAccessGrantsDialog } from "./issue-access-grants-dialog";
 import { LocalDirectoryHint } from "../../projects/components/local-directory-hint";
 import { useNewRunIds } from "./use-run-comment-motion";
 import { AgentRunComment, CommentCard } from "./comment-card";
@@ -1104,6 +1097,24 @@ interface IssueDetailProps {
    */
   highlightRequestToken?: number;
   /**
+   * Access request the task-permissions dialog should land on. Set when the
+   * host opened an access-request notification: the dialog centres that
+   * request and stops offering approve/reject once it left pending.
+   */
+  accessRequestId?: string;
+  /**
+   * Bump to replay the `accessRequestId` landing on an already-mounted detail
+   * without a remount — the same contract as `highlightRequestToken`, for the
+   * same reason (see `InboxPage.handleSelect`).
+   */
+  accessRequestToken?: number;
+  /**
+   * Replaces `IssueNotFound` when the issue cannot be loaded. A host that knows
+   * WHY it might be missing — the inbox holds access-request notifications, and
+   * a denied reader is not a deleted task — passes the surface that fits.
+   */
+  notFoundFallback?: ReactNode;
+  /**
    * Far-left header slot, replacing the mobile sidebar trigger. A host that
    * embeds this detail one level deep (the inbox, on a phone) passes its own
    * "back" control here instead of stacking a second 48px bar above us — the
@@ -1232,7 +1243,7 @@ export function IssueDetailSkeleton({ leading }: { leading?: ReactNode } = {}) {
 // IssueDetail
 // ---------------------------------------------------------------------------
 
-export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = true, layoutId = "multica_issue_detail_layout", highlightCommentId, highlightRequestToken, leadingAction }: IssueDetailProps) {
+export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = true, layoutId = "multica_issue_detail_layout", highlightCommentId, highlightRequestToken, accessRequestId, accessRequestToken, notFoundFallback, leadingAction }: IssueDetailProps) {
   const { t } = useT("issues");
   const locale = useLocale();
   const timeAgo = useTimeAgo();
@@ -2955,6 +2966,12 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
               />
               <TooltipContent side="bottom">{actions.isPinned ? t(($) => $.detail.unpin_tooltip) : t(($) => $.detail.pin_tooltip)}</TooltipContent>
             </Tooltip>
+            <IssueAccessGrantsDialog
+              issueId={issue.id}
+              projectId={issue.project_id}
+              focusRequestId={accessRequestId ?? null}
+              focusRequestToken={accessRequestToken}
+            />
             <IssueActionsDropdown
               issue={issue}
               align="end"

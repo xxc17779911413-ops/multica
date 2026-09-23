@@ -26,6 +26,7 @@ import { currentPath, useNavigation } from "../../navigation";
 import { TitleEditor, ContentEditor, type ContentEditorRef } from "../../editor";
 import { PriorityIcon } from "../../issues/components/priority-icon";
 import { ProjectResourcesSection } from "./project-resources-section";
+import { ProjectPermissionsPanel } from "./project-permissions-panel";
 import { ProjectStartDatePicker } from "./project-start-date-picker";
 import { ProjectDueDatePicker } from "./project-due-date-picker";
 import { IssueSurface } from "../../issues/surface/issue-surface";
@@ -323,6 +324,11 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
         />
       </div>
 
+      {/* 2026-08-28 coder(lq): Keep project authorization beside the project identity so managers can find it without opening another settings page. */}
+      <div className="flex items-center">
+        <ProjectPermissionsPanel projectId={projectId} />
+      </div>
+
       {/* Properties */}
       <div>
         <button
@@ -559,7 +565,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
                     <Link2 className="h-3.5 w-3.5" />
                     {t(($) => $.detail.copy_link)}
                   </DropdownMenuItem>
-                  {isWorkspaceAdmin && (
+                  {project.can_delete && (
                     <>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem
@@ -642,7 +648,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
       </ResizablePanelGroup>
 
       {/* Delete confirmation */}
-      {isWorkspaceAdmin && (
+      {project.can_delete && (
         <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
           <AlertDialogContent>
             <AlertDialogHeader>

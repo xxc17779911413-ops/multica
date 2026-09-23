@@ -474,7 +474,26 @@
     "project_directory_path_copied_with_branch": "프로젝트 디렉터리 경로를 복사했습니다 — 작업은 {{branch}} 브랜치에 있습니다",
     "workdir_path_copy_failed": "작업 디렉터리 경로를 복사하지 못했습니다",
     "workdir_path_unavailable": "아직 로컬 작업 디렉터리가 없습니다. 로컬 에이전트가 이 태스크를 실행하지 않았습니다",
-    "pull_requests_empty_title": "연결된 PR이 없습니다."
+    "pull_requests_empty_title": "연결된 PR이 없습니다.",
+    "access_denied_title": "접근 권한이 없습니다",
+    "access_denied_description": "아직 이 태스크를 볼 수 없습니다. 태스크 소유자에게 접근 권한을 요청하세요.",
+    "requested_role": "접근 수준",
+    "request_access": "접근 권한 요청",
+    "my_access_requests": "내 접근 요청",
+    "access_request_submitted": "태스크 소유자에게 접근 요청을 제출했습니다",
+    "access_request_failed": "접근 요청을 제출하지 못했습니다. 다시 시도해 주세요.",
+    "access_request_cancel_failed": "요청을 취소하지 못했습니다. 다시 시도해 주세요.",
+    "access_request_role_viewer": "조회 가능",
+    "access_request_role_editor": "편집 가능",
+    "access_request_role_manager": "관리 가능",
+    "access_request_status_pending": "승인 대기 중",
+    "access_request_status_approved": "승인됨",
+    "access_request_status_rejected": "거절됨",
+    "access_request_status_cancelled": "취소됨",
+    "access_request_status_expired": "만료됨",
+    "access_request_unknown_role": "기타 권한",
+    "access_request_unknown_status": "알 수 없는 상태",
+    "access_check_failed": "태스크 상태를 확인할 수 없습니다."
   },
   "timeline": {
     "loading": "불러오는 중..."

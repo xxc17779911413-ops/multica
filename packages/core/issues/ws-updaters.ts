@@ -388,6 +388,12 @@ export function onIssueCreated(
   const bucketable = issueStatusCategory(issue) !== null;
   for (const [key, data] of qc.getQueriesData<ListIssuesCache>({ queryKey: issueKeys.list(wsId) })) {
     if (!data) continue;
+    // 2026-09-01 coder(lq): Restricted caches must refetch so the server can
+    // apply project/task visibility instead of optimistically leaking a new issue.
+    if (!issueListIncludesWorkspaceOwned(key)) {
+      qc.invalidateQueries({ queryKey: key });
+      continue;
+    }
     if (bucketable) {
       qc.setQueryData<ListIssuesCache>(key, addIssueToBuckets(data, issue));
     } else {
