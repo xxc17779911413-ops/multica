@@ -436,11 +436,6 @@ func (h *Handler) VerifyCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.Queries.MarkVerificationCodeUsed(r.Context(), dbCode.ID); err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to verify code")
-		return
-	}
-
 	existing, lookupErr := h.Queries.GetUserByEmail(r.Context(), email)
 	existingIsNew := isNotFound(lookupErr)
 	if lookupErr != nil && !existingIsNew {
@@ -466,6 +461,14 @@ func (h *Handler) VerifyCode(w http.ResponseWriter, r *http.Request) {
 			})
 			return
 		}
+	}
+
+	// The code is spent only once every gate has passed: a password-less
+	// retry (password_required) must leave the same code usable after the
+	// user fills the password fields.
+	if err := h.Queries.MarkVerificationCodeUsed(r.Context(), dbCode.ID); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to verify code")
+		return
 	}
 
 	user, isNew, err := h.findOrCreateUser(r.Context(), email)

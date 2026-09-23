@@ -21,20 +21,13 @@ import {
 } from "@multica/ui/components/ui/input-otp";
 import { useAuthStore } from "@multica/core/auth";
 import { workspaceKeys } from "@multica/core/workspace/queries";
-import { api } from "@multica/core/api";
+import { api, ApiError } from "@multica/core/api";
 import type { User } from "@multica/core/types";
 import { useT } from "../i18n";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
-
-interface GoogleAuthConfig {
-  clientId: string;
-  redirectUri: string;
-  /** Opaque state passed through Google OAuth (e.g. "platform:desktop"). */
-  state?: string;
-}
 
 interface CliCallbackConfig {
   /** Validated localhost callback URL */
@@ -49,19 +42,20 @@ interface LoginPageProps {
   /** Called after successful login. The workspace list is seeded into React
    *  Query before this fires, so the caller can compute a destination URL. */
   onSuccess: () => void;
-  /** Google OAuth config. Omit to disable Google login. */
-  google?: GoogleAuthConfig;
   /** CLI callback config for authorizing CLI tools. */
   cliCallback?: CliCallbackConfig;
   /** Called after a token is obtained (e.g. to set cookies). */
   onTokenObtained?: () => void;
-  /** Override Google login handler (e.g. desktop opens browser externally). When provided, renders the Google button even if `google` config is omitted. */
-  onGoogleLogin?: () => void;
   /** Slot rendered at the bottom of the sign-in card, below the
    *  Google button. The web shell uses it for a "Prefer the desktop
    *  app?" prompt; desktop omits it (a download prompt inside the app
    *  would be absurd). */
   extra?: ReactNode;
+  /**
+   * Which step opens first. Production shells use the password form; tests
+   * and non-password forks can open directly on the code flow.
+   */
+  defaultStep?: "login" | "email";
 }
 
 // ---------------------------------------------------------------------------
@@ -101,21 +95,31 @@ export function validateCliCallback(cliCallback: string): boolean {
 export function LoginPage({
   logo,
   onSuccess,
-  google,
   cliCallback,
   onTokenObtained,
-  onGoogleLogin,
   extra,
+  defaultStep = "login",
 }: LoginPageProps) {
   const { t } = useT("auth");
   const qc = useQueryClient();
-  const [step, setStep] = useState<"email" | "code" | "cli_confirm">("email");
+  const [step, setStep] = useState<
+    "login" | "email" | "code" | "set_password" | "cli_confirm"
+  >(defaultStep);
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [cooldown, setCooldown] = useState(0);
   const [existingUser, setExistingUser] = useState<User | null>(null);
+  // Password-first sign-in: "login" is the password form, "email"/"code"
+  // carry registration and the one-time pre-password bridge, "set_password"
+  // is the forced screen after a bridged code login.
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  // Revealed on the code step when the server says this email registers
+  // (password_required) — the code stays valid because the server only
+  // spends it once every gate has passed.
+  const [needPassword, setNeedPassword] = useState(false);
   // Tracks how the existing session was detected so handleCliAuthorize
   // uses the matching token source (cookie → issueCliToken, localStorage → direct).
   const authSourceRef = useRef<"cookie" | "localStorage">("cookie");
@@ -208,7 +212,11 @@ export function LoginPage({
       try {
         if (cliCallback) {
           // CLI path: get token directly for the redirect URL
-          const { token } = await api.verifyCode(email, value);
+          const { token } = await api.verifyCode(
+            email,
+            value,
+            needPassword ? password : undefined,
+          );
           localStorage.setItem("multica_token", token);
           api.setToken(token);
           onTokenObtained?.();
@@ -220,12 +228,36 @@ export function LoginPage({
         // caller's onSuccess can read it synchronously to compute a destination
         // URL (first workspace's slug, or /workspaces/new for zero-workspace
         // users).
-        await useAuthStore.getState().verifyCode(email, value);
+        await useAuthStore
+          .getState()
+          .verifyCode(email, value, needPassword ? password : undefined);
+        if (useAuthStore.getState().mustSetPassword) {
+          // Pre-password account: the session is live but unusable until a
+          // password exists, which is what the next screen collects.
+          setStep("set_password");
+          setCode("");
+          setPassword("");
+          setConfirmPassword("");
+          setLoading(false);
+          return;
+        }
         const wsList = await api.listWorkspaces();
         qc.setQueryData(workspaceKeys.list(), wsList);
         onTokenObtained?.();
         onSuccess();
       } catch (err) {
+        if (
+          err instanceof ApiError &&
+          err.body &&
+          typeof err.body === "object" &&
+          (err.body as { code?: unknown }).code === "password_required"
+        ) {
+          // New email: keep the same code and reveal the password fields.
+          setNeedPassword(true);
+          setError(t(($) => $.verify.password_hint));
+          setLoading(false);
+          return;
+        }
         setError(
           err instanceof Error
             ? err.message
@@ -235,8 +267,70 @@ export function LoginPage({
         setLoading(false);
       }
     },
-    [email, onSuccess, cliCallback, onTokenObtained, qc, t],
+    [email, needPassword, password, onSuccess, cliCallback, onTokenObtained, qc, t],
   );
+
+  const handleLogin = useCallback(async () => {
+    if (!email) {
+      setError(t(($) => $.common.email_required));
+      return;
+    }
+    if (!password) {
+      setError(t(($) => $.signin.password_required));
+      return;
+    }
+    setLoading(true);
+    setError("");
+    try {
+      await useAuthStore.getState().login(email, password);
+      const wsList = await api.listWorkspaces();
+      qc.setQueryData(workspaceKeys.list(), wsList);
+      onTokenObtained?.();
+      onSuccess();
+    } catch (err) {
+      if (
+        err instanceof ApiError &&
+        err.body &&
+        typeof err.body === "object" &&
+        (err.body as { code?: unknown }).code === "password_not_set"
+      ) {
+        // Pre-password account: the code bridge is the only way in, and it
+        // is also what sets the password.
+        setError(t(($) => $.signin.password_not_set));
+        setStep("email");
+        setPassword("");
+        setLoading(false);
+        return;
+      }
+      setError(err instanceof Error ? err.message : t(($) => $.errors.login_failed));
+      setLoading(false);
+    }
+  }, [email, password, onSuccess, onTokenObtained, qc, t]);
+
+  const handleSetPassword = useCallback(async () => {
+    if (password.length < 8) {
+      setError(t(($) => $.set_password.too_short));
+      return;
+    }
+    if (password !== confirmPassword) {
+      setError(t(($) => $.set_password.mismatch));
+      return;
+    }
+    setLoading(true);
+    setError("");
+    try {
+      await useAuthStore.getState().setPassword(password);
+      const wsList = await api.listWorkspaces();
+      qc.setQueryData(workspaceKeys.list(), wsList);
+      onTokenObtained?.();
+      onSuccess();
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : t(($) => $.set_password.failed),
+      );
+      setLoading(false);
+    }
+  }, [password, confirmPassword, onSuccess, onTokenObtained, qc, t]);
 
   const handleResend = async () => {
     if (cooldown > 0) return;
@@ -277,24 +371,6 @@ export function LoginPage({
       setStep("email");
       setLoading(false);
     }
-  };
-
-  const handleGoogleLogin = () => {
-    if (onGoogleLogin) {
-      onGoogleLogin();
-      return;
-    }
-    if (!google) return;
-    const params = new URLSearchParams({
-      client_id: google.clientId,
-      redirect_uri: google.redirectUri,
-      response_type: "code",
-      scope: "openid email profile",
-      access_type: "offline",
-      prompt: "select_account",
-    });
-    if (google.state) params.set("state", google.state);
-    window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
   };
 
   // -------------------------------------------------------------------------
@@ -342,6 +418,94 @@ export function LoginPage({
   }
 
   // -------------------------------------------------------------------------
+  // Password step
+  // -------------------------------------------------------------------------
+
+  if (step === "login") {
+    return (
+      <div className="flex min-h-svh items-center justify-center">
+        <Card className="w-full max-w-sm">
+          <CardHeader className="text-center">
+            {logo && <div className="mx-auto mb-4">{logo}</div>}
+            <CardTitle className="text-display-sm">
+              {t(($) => $.signin.title)}
+            </CardTitle>
+            <CardDescription>
+              {t(($) => $.signin.password_description)}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {sessionExpired && (
+              <Alert>
+                <AlertDescription>
+                  {t(($) => $.errors.session_expired)}
+                </AlertDescription>
+              </Alert>
+            )}
+            <form
+              id="password-login-form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                handleLogin();
+              }}
+              className="space-y-4"
+            >
+              <div className="space-y-2">
+                <Label htmlFor="login-email-pw">{t(($) => $.common.email)}</Label>
+                <Input
+                  id="login-email-pw"
+                  type="email"
+                  placeholder={t(($) => $.common.email_placeholder)}
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  autoFocus
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="login-password">{t(($) => $.signin.password)}</Label>
+                <Input
+                  id="login-password"
+                  type="password"
+                  placeholder={t(($) => $.signin.password_placeholder)}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                />
+              </div>
+              {error && <p className="text-body text-destructive">{error}</p>}
+            </form>
+          </CardContent>
+          <CardFooter className="flex flex-col gap-3">
+            <Button
+              type="submit"
+              form="password-login-form"
+              className="w-full"
+              size="lg"
+              disabled={!email || !password || loading}
+            >
+              {loading ? t(($) => $.signin.signing_in) : t(($) => $.signin.sign_in)}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              className="w-full"
+              onClick={() => {
+                setStep("email");
+                setError("");
+                setPassword("");
+              }}
+            >
+              {t(($) => $.signin.use_code)}
+            </Button>
+            {extra && <div className="w-full pt-1 text-center">{extra}</div>}
+          </CardFooter>
+        </Card>
+      </div>
+    );
+  }
+
+  // -------------------------------------------------------------------------
   // Code verification step
   // -------------------------------------------------------------------------
 
@@ -378,6 +542,39 @@ export function LoginPage({
                 <InputOTPSlot index={5} />
               </InputOTPGroup>
             </InputOTP>
+            {needPassword && (
+              <div className="w-full space-y-2 text-left">
+                <p className="text-caption text-muted-foreground">
+                  {t(($) => $.verify.password_hint)}
+                </p>
+                <Input
+                  type="password"
+                  placeholder={t(($) => $.verify.password)}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  disabled={loading}
+                />
+                <Input
+                  type="password"
+                  placeholder={t(($) => $.verify.confirm_password)}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  disabled={loading}
+                />
+                <Button
+                  type="button"
+                  className="w-full"
+                  disabled={
+                    loading || !password || password !== confirmPassword
+                  }
+                  onClick={() => handleVerify(code)}
+                >
+                  {loading
+                    ? t(($) => $.signin.signing_in)
+                    : t(($) => $.verify.submit_password)}
+                </Button>
+              </div>
+            )}
             {error && (
               <p className="text-body text-destructive">{error}</p>
             )}
@@ -406,6 +603,80 @@ export function LoginPage({
               }}
             >
               {t(($) => $.common.back)}
+            </Button>
+          </CardFooter>
+        </Card>
+      </div>
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // Forced set-password step (pre-password account bridged by code)
+  // -------------------------------------------------------------------------
+
+  if (step === "set_password") {
+    return (
+      <div className="flex min-h-svh items-center justify-center">
+        <Card className="w-full max-w-sm">
+          <CardHeader className="text-center">
+            {logo && <div className="mx-auto mb-4">{logo}</div>}
+            <CardTitle className="text-display-sm">
+              {t(($) => $.set_password.title)}
+            </CardTitle>
+            <CardDescription>
+              {t(($) => $.set_password.description)}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form
+              id="set-password-form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                handleSetPassword();
+              }}
+              className="space-y-4"
+            >
+              <div className="space-y-2">
+                <Label htmlFor="set-password">
+                  {t(($) => $.set_password.password)}
+                </Label>
+                <Input
+                  id="set-password"
+                  type="password"
+                  autoFocus
+                  minLength={8}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="set-password-confirm">
+                  {t(($) => $.set_password.confirm)}
+                </Label>
+                <Input
+                  id="set-password-confirm"
+                  type="password"
+                  minLength={8}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  required
+                />
+              </div>
+              {error && <p className="text-body text-destructive">{error}</p>}
+            </form>
+          </CardContent>
+          <CardFooter>
+            <Button
+              type="submit"
+              form="set-password-form"
+              className="w-full"
+              size="lg"
+              disabled={!password || !confirmPassword || loading}
+            >
+              {loading
+                ? t(($) => $.set_password.submitting)
+                : t(($) => $.set_password.submit)}
             </Button>
           </CardFooter>
         </Card>
@@ -467,36 +738,17 @@ export function LoginPage({
               ? t(($) => $.signin.sending)
               : t(($) => $.signin.continue)}
           </Button>
-          {(google || onGoogleLogin) && (
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full"
-              size="lg"
-              onClick={handleGoogleLogin}
-              disabled={loading}
-            >
-              <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
-                <path
-                  d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"
-                  fill="#4285F4"
-                />
-                <path
-                  d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                  fill="#34A853"
-                />
-                <path
-                  d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-                  fill="#FBBC05"
-                />
-                <path
-                  d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-                  fill="#EA4335"
-                />
-              </svg>
-              {t(($) => $.signin.google)}
-            </Button>
-          )}
+          <Button
+            type="button"
+            variant="ghost"
+            className="w-full"
+            onClick={() => {
+              setStep("login");
+              setError("");
+            }}
+          >
+            {t(($) => $.signin.use_password)}
+          </Button>
           {extra && <div className="w-full pt-1 text-center">{extra}</div>}
         </CardFooter>
       </Card>

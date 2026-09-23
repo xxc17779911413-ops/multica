@@ -123,19 +123,19 @@ describe("LoginPage", () => {
 
   it("says the session expired when that is why the user is here", () => {
     mockAuthState.expired = true;
-    renderWithI18n(<LoginPage onSuccess={onSuccess} />);
+    renderWithI18n(<LoginPage defaultStep="email" onSuccess={onSuccess} />);
     expect(
       screen.getByText(/your session expired/i),
     ).toBeInTheDocument();
   });
 
   it("stays quiet on an ordinary visit to the login page", () => {
-    renderWithI18n(<LoginPage onSuccess={onSuccess} />);
+    renderWithI18n(<LoginPage defaultStep="email" onSuccess={onSuccess} />);
     expect(screen.queryByText(/your session expired/i)).not.toBeInTheDocument();
   });
 
   it("renders email form with 'Sign in to Multica' title", () => {
-    renderWithI18n(<LoginPage onSuccess={onSuccess} />);
+    renderWithI18n(<LoginPage defaultStep="email" onSuccess={onSuccess} />);
     expect(
       screen.getByText(/sign in to multica/i),
     ).toBeInTheDocument();
@@ -153,7 +153,7 @@ describe("LoginPage", () => {
   // -------------------------------------------------------------------------
 
   it("shows error when submitting with empty email", async () => {
-    renderWithI18n(<LoginPage onSuccess={onSuccess} />);
+    renderWithI18n(<LoginPage defaultStep="email" onSuccess={onSuccess} />);
 
     // The Continue button is disabled when email is empty, so we submit the
     // form programmatically the same way the component does — via form submit.
@@ -181,7 +181,7 @@ describe("LoginPage", () => {
 
   it("calls sendCode on form submit with email", async () => {
     mockSendCode.mockResolvedValueOnce(undefined);
-    renderWithI18n(<LoginPage onSuccess={onSuccess} />);
+    renderWithI18n(<LoginPage defaultStep="email" onSuccess={onSuccess} />);
 
     const user = userEvent.setup();
     await user.type(screen.getByLabelText(/email/i), "test@example.com");
@@ -193,7 +193,7 @@ describe("LoginPage", () => {
   it("shows 'Sending code...' while submitting", async () => {
     // Never resolve so loading stays true
     mockSendCode.mockReturnValueOnce(new Promise(() => {}));
-    renderWithI18n(<LoginPage onSuccess={onSuccess} />);
+    renderWithI18n(<LoginPage defaultStep="email" onSuccess={onSuccess} />);
 
     const user = userEvent.setup();
     await user.type(screen.getByLabelText(/email/i), "test@example.com");
@@ -204,7 +204,7 @@ describe("LoginPage", () => {
 
   it("transitions to code step after successful sendCode", async () => {
     mockSendCode.mockResolvedValueOnce(undefined);
-    renderWithI18n(<LoginPage onSuccess={onSuccess} />);
+    renderWithI18n(<LoginPage defaultStep="email" onSuccess={onSuccess} />);
 
     const user = userEvent.setup();
     await user.type(screen.getByLabelText(/email/i), "test@example.com");
@@ -220,7 +220,7 @@ describe("LoginPage", () => {
 
   it("autofocuses the OTP input when the code step opens", async () => {
     mockSendCode.mockResolvedValueOnce(undefined);
-    renderWithI18n(<LoginPage onSuccess={onSuccess} />);
+    renderWithI18n(<LoginPage defaultStep="email" onSuccess={onSuccess} />);
 
     const user = userEvent.setup();
     await user.type(screen.getByLabelText(/email/i), "test@example.com");
@@ -237,7 +237,7 @@ describe("LoginPage", () => {
 
   it("shows error when sendCode fails", async () => {
     mockSendCode.mockRejectedValueOnce(new Error("Rate limited"));
-    renderWithI18n(<LoginPage onSuccess={onSuccess} />);
+    renderWithI18n(<LoginPage defaultStep="email" onSuccess={onSuccess} />);
 
     const user = userEvent.setup();
     await user.type(screen.getByLabelText(/email/i), "test@example.com");
@@ -250,7 +250,7 @@ describe("LoginPage", () => {
 
   it("shows generic error when sendCode throws non-Error", async () => {
     mockSendCode.mockRejectedValueOnce("boom");
-    renderWithI18n(<LoginPage onSuccess={onSuccess} />);
+    renderWithI18n(<LoginPage defaultStep="email" onSuccess={onSuccess} />);
 
     const user = userEvent.setup();
     await user.type(screen.getByLabelText(/email/i), "test@example.com");
@@ -272,7 +272,7 @@ describe("LoginPage", () => {
     mockVerifyCode.mockResolvedValueOnce(undefined);
     mockApiListWorkspaces.mockResolvedValueOnce([{ id: "ws-1" }]);
 
-    renderWithI18n(<LoginPage onSuccess={onSuccess} />);
+    renderWithI18n(<LoginPage defaultStep="email" onSuccess={onSuccess} />);
 
     const user = userEvent.setup();
     // Step 1: email
@@ -309,7 +309,7 @@ describe("LoginPage", () => {
     mockSendCode.mockResolvedValueOnce(undefined);
     mockVerifyCode.mockRejectedValueOnce(new Error("Invalid code"));
 
-    renderWithI18n(<LoginPage onSuccess={onSuccess} />);
+    renderWithI18n(<LoginPage defaultStep="email" onSuccess={onSuccess} />);
 
     const user = userEvent.setup();
     await user.type(screen.getByLabelText(/email/i), "test@example.com");
@@ -336,7 +336,7 @@ describe("LoginPage", () => {
 
   it("disables resend button during cooldown", async () => {
     mockSendCode.mockResolvedValue(undefined);
-    renderWithI18n(<LoginPage onSuccess={onSuccess} />);
+    renderWithI18n(<LoginPage defaultStep="email" onSuccess={onSuccess} />);
 
     const user = userEvent.setup();
     await user.type(screen.getByLabelText(/email/i), "test@example.com");
@@ -355,7 +355,7 @@ describe("LoginPage", () => {
 
   it("calls sendCode again when resend is clicked after cooldown", async () => {
     mockSendCode.mockResolvedValue(undefined);
-    renderWithI18n(<LoginPage onSuccess={onSuccess} />);
+    renderWithI18n(<LoginPage defaultStep="email" onSuccess={onSuccess} />);
 
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     await user.type(screen.getByLabelText(/email/i), "test@example.com");
@@ -391,25 +391,6 @@ describe("LoginPage", () => {
   // Google OAuth
   // -------------------------------------------------------------------------
 
-  it("renders Google OAuth button when google prop provided", () => {
-    render(
-      <LoginPage
-        onSuccess={onSuccess}
-        google={{ clientId: "goog-123", redirectUri: "http://localhost/cb" }}
-      />,
-    );
-    expect(
-      screen.getByRole("button", { name: /continue with google/i }),
-    ).toBeInTheDocument();
-  });
-
-  it("hides Google OAuth button when google prop omitted", () => {
-    renderWithI18n(<LoginPage onSuccess={onSuccess} />);
-    expect(
-      screen.queryByRole("button", { name: /continue with google/i }),
-    ).not.toBeInTheDocument();
-  });
-
   // -------------------------------------------------------------------------
   // CLI callback — existing session
   // -------------------------------------------------------------------------
@@ -426,7 +407,7 @@ describe("LoginPage", () => {
       });
 
     render(
-      <LoginPage
+      <LoginPage defaultStep="email"
         onSuccess={onSuccess}
         cliCallback={{ url: "http://localhost:9876/callback", state: "abc" }}
       />,
@@ -464,7 +445,7 @@ describe("LoginPage", () => {
       });
 
     render(
-      <LoginPage
+      <LoginPage defaultStep="email"
         onSuccess={onSuccess}
         cliCallback={{ url: "http://localhost:9876/callback", state: "abc" }}
       />,
@@ -490,7 +471,7 @@ describe("LoginPage", () => {
     const onTokenObtained = vi.fn();
 
     render(
-      <LoginPage
+      <LoginPage defaultStep="email"
         onSuccess={onSuccess}
         onTokenObtained={onTokenObtained}
         cliCallback={{ url: "http://localhost:9876/callback", state: "abc" }}
@@ -524,7 +505,7 @@ describe("LoginPage", () => {
       });
 
     render(
-      <LoginPage
+      <LoginPage defaultStep="email"
         onSuccess={onSuccess}
         cliCallback={{ url: "http://localhost:9876/callback", state: "abc" }}
       />,
@@ -559,7 +540,7 @@ describe("LoginPage", () => {
     });
 
     render(
-      <LoginPage
+      <LoginPage defaultStep="email"
         onSuccess={onSuccess}
         cliCallback={{ url: "http://localhost:9876/callback", state: "abc" }}
       />,
@@ -582,7 +563,7 @@ describe("LoginPage", () => {
     const onTokenObtained = vi.fn();
 
     render(
-      <LoginPage
+      <LoginPage defaultStep="email"
         onSuccess={onSuccess}
         onTokenObtained={onTokenObtained}
         cliCallback={{ url: "http://localhost:9876/callback", state: "abc" }}
@@ -615,7 +596,7 @@ describe("LoginPage", () => {
     const onTokenObtained = vi.fn();
 
     render(
-      <LoginPage
+      <LoginPage defaultStep="email"
         onSuccess={onSuccess}
         onTokenObtained={onTokenObtained}
         cliCallback={{ url: "http://localhost:9876/callback", state: "xyz" }}
@@ -658,7 +639,7 @@ describe("LoginPage", () => {
 
   it("renders logo when provided", () => {
     render(
-      <LoginPage
+      <LoginPage defaultStep="email"
         onSuccess={onSuccess}
         logo={<div data-testid="custom-logo">Logo</div>}
       />,
@@ -677,7 +658,7 @@ describe("LoginPage", () => {
     const onTokenObtained = vi.fn();
 
     render(
-      <LoginPage
+      <LoginPage defaultStep="email"
         onSuccess={onSuccess}
         onTokenObtained={onTokenObtained}
       />,
@@ -708,7 +689,7 @@ describe("LoginPage", () => {
 
   it("back button returns to email step", async () => {
     mockSendCode.mockResolvedValueOnce(undefined);
-    renderWithI18n(<LoginPage onSuccess={onSuccess} />);
+    renderWithI18n(<LoginPage defaultStep="email" onSuccess={onSuccess} />);
 
     const user = userEvent.setup();
     await user.type(screen.getByLabelText(/email/i), "test@example.com");
