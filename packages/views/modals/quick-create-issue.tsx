@@ -12,6 +12,7 @@ import {
   MoreHorizontal,
   Settings2,
   X as XIcon,
+  Shapes,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -56,11 +57,19 @@ import {
   type IssuePriority,
   type SourceContextPreview,
   type Squad,
+  type IssuePropertyValue,
+  type IssuePropertyValues,
 } from "@multica/core/types";
 import { ActorAvatar } from "../common/actor-avatar";
 import { ClearablePillButton, PillButton } from "../common/pill-button";
 import { ProjectPicker } from "../projects/components/project-picker";
 import { DueDatePicker, PriorityIcon, PriorityPicker } from "../issues/components";
+import {
+  CustomPropertyValueDisplay,
+  CustomPropertyValueInput,
+} from "../issues/components/pickers/custom-property-picker";
+import { PropertyIcon } from "../common/property-icon";
+import { propertyListOptions } from "@multica/core/properties";
 import { canAssignAgent } from "../issues/components/pickers/assignee-picker";
 import { isAgentRuntimeBound } from "@multica/core/agents";
 import {
@@ -125,6 +134,19 @@ export function AgentCreatePanel({
   const workspaceName = useCurrentWorkspace()?.name;
   const workspacePaths = useWorkspacePaths();
   const wsId = useWorkspaceId();
+  const { data: workspaceProperties = [] } = useQuery({
+    ...propertyListOptions(wsId),
+    select: (response) => response.properties,
+  });
+  const updatePropertyValue = (propertyId: string, value: IssuePropertyValue | undefined) => {
+    setPropertyValues((current) => {
+      const next = { ...current };
+      if (value === undefined) delete next[propertyId];
+      else next[propertyId] = value;
+      return next;
+    });
+    setError(null);
+  };
   const anchorCommentId = typeof data?.anchor_comment_id === "string" ? data.anchor_comment_id : null;
   const sourcePreview = data?.source_context_preview as SourceContextPreview | undefined;
   const sourceContextLoading = data?.source_context_loading === true;
@@ -279,6 +301,8 @@ export function AgentCreatePanel({
   const [priority, setPriority] = useState<IssuePriority>(
     (data?.priority as IssuePriority | undefined) ?? draft.shared.priority,
   );
+  const [propertyValues, setPropertyValues] = useState<IssuePropertyValues>({});
+  const [propertyPickerId, setPropertyPickerId] = useState<string | null>(null);
   const [dueDate, setDueDate] = useState<string | null>(
     (data?.due_date as string | undefined) ?? draft.shared.dueDate,
   );
@@ -444,6 +468,9 @@ export function AgentCreatePanel({
               project_id: projectId ?? undefined,
               ...(priority !== "none" ? { priority } : {}),
               ...(dueDate ? { due_date: dueDate } : {}),
+              ...(Object.keys(propertyValues).length > 0
+                ? { properties: propertyValues }
+                : {}),
               ...(activeAttachmentIds.length > 0 ? { attachment_ids: activeAttachmentIds } : {}),
             },
           });
@@ -456,6 +483,9 @@ export function AgentCreatePanel({
             project_id: projectId ?? undefined,
             ...(priority !== "none" ? { priority } : {}),
             ...(dueDate ? { due_date: dueDate } : {}),
+            ...(Object.keys(propertyValues).length > 0
+              ? { properties: propertyValues }
+              : {}),
             parent_issue_id: parentIssueId,
             ...(activeAttachmentIds.length > 0 ? { attachment_ids: activeAttachmentIds } : {}),
           });
@@ -472,6 +502,15 @@ export function AgentCreatePanel({
         // user can switch to a live agent / upgrade their daemon without
         // leaving the flow.
         if (e instanceof ApiError && e.body && typeof e.body === "object") {
+          if ((e.body as { code?: unknown }).code === "missing_required_issue_property") {
+            const missing = (e.body as { missing_properties?: unknown }).missing_properties;
+            setError(
+              t(($) => $.create_issue.required_properties_missing, {
+                names: Array.isArray(missing) ? missing.join(", ") : "",
+              }),
+            );
+            return false;
+          }
           const body = e.body as {
             code?: string;
             reason?: string;
@@ -785,6 +824,79 @@ export function AgentCreatePanel({
               open={fieldPickerOpen === "due_date" ? true : undefined}
               onOpenChange={(open) => setFieldPickerOpen(open ? "due_date" : null)}
             />
+          )}
+          {workspaceProperties
+            .filter(
+              (property) =>
+                property.required ||
+                Object.prototype.hasOwnProperty.call(propertyValues, property.id) ||
+                propertyPickerId === property.id,
+            )
+            .map((property) => {
+              const value = propertyValues[property.id];
+              return (
+                <CustomPropertyValueInput
+                  key={property.id}
+                  property={property}
+                  value={value}
+                  onChange={(next) => updatePropertyValue(property.id, next)}
+                  open={propertyPickerId === property.id}
+                  onOpenChange={(open) =>
+                    setPropertyPickerId(open ? property.id : null)
+                  }
+                  triggerRender={<PillButton />}
+                  trigger={
+                    <>
+                      <PropertyIcon property={property} className="size-3.5 text-caption" />
+                      <span className="max-w-32 truncate">{property.name}</span>
+                      {property.required && value === undefined && (
+                        <span className="text-destructive">*</span>
+                      )}
+                      {value !== undefined && (
+                        <span className="max-w-40 truncate text-muted-foreground">
+                          <CustomPropertyValueDisplay property={property} value={value} />
+                        </span>
+                      )}
+                    </>
+                  }
+                />
+              );
+            })}
+          {workspaceProperties.length > 0 && (
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <PillButton
+                    aria-label={t(($) => $.create_issue.custom_properties)}
+                    title={t(($) => $.create_issue.custom_properties)}
+                  >
+                    <Shapes className="size-3.5" />
+                  </PillButton>
+                }
+              />
+              <DropdownMenuContent align="start" className="w-56">
+                {workspaceProperties.map((property) => (
+                  <DropdownMenuItem
+                    key={property.id}
+                    disabled={Object.prototype.hasOwnProperty.call(
+                      propertyValues,
+                      property.id,
+                    )}
+                    onClick={() => setPropertyPickerId(property.id)}
+                  >
+                    <PropertyIcon property={property} className="size-3.5 text-caption" />
+                    <span className="truncate">{property.name}</span>
+                    {property.required && (
+                      <span className="text-destructive">*</span>
+                    )}
+                    {Object.prototype.hasOwnProperty.call(
+                      propertyValues,
+                      property.id,
+                    ) && <Check className="ml-auto size-3.5" />}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
           <DropdownMenu>
             <DropdownMenuTrigger

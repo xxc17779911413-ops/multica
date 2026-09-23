@@ -55,6 +55,7 @@ func TestQuickCreateFailure_DoesNotSubscribeRequester(t *testing.T) {
 		pgtype.UUID{},
 		pgtype.UUID{},
 		nil,
+		nil,
 	)
 	if err != nil {
 		t.Fatalf("EnqueueQuickCreateTask: %v", err)
@@ -123,6 +124,7 @@ func TestQuickCreateFailure_SurfacesAgentOutput(t *testing.T) {
 		"",
 		pgtype.UUID{},
 		pgtype.UUID{},
+		nil,
 		nil,
 	)
 	if err != nil {
@@ -195,6 +197,7 @@ func TestQuickCreateLookupFault_WritesUnconfirmedInbox(t *testing.T) {
 		"",
 		pgtype.UUID{},
 		pgtype.UUID{},
+		nil,
 		nil,
 	)
 	if err != nil {
@@ -277,6 +280,7 @@ func TestQuickCreateFailure_RedactsAgentOutput(t *testing.T) {
 		pgtype.UUID{},
 		pgtype.UUID{},
 		nil,
+		nil,
 	)
 	if err != nil {
 		t.Fatalf("EnqueueQuickCreateTask: %v", err)
@@ -345,6 +349,7 @@ func TestQuickCreateLookupCancelled_StillWritesUnconfirmedInbox(t *testing.T) {
 		"",
 		pgtype.UUID{},
 		pgtype.UUID{},
+		nil,
 		nil,
 	)
 	if err != nil {

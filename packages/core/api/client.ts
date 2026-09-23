@@ -557,6 +557,8 @@ export interface ClientUsageRequest {
 export interface LoginResponse {
   token: string;
   user: User;
+  /** True when a pre-password account signed in by code and must set one now. */
+  must_set_password?: boolean;
 }
 
 export class ApiError extends Error {
@@ -1039,10 +1041,30 @@ export class ApiClient {
     });
   }
 
-  async verifyCode(email: string, code: string): Promise<LoginResponse> {
+  async verifyCode(
+    email: string,
+    code: string,
+    password?: string,
+  ): Promise<LoginResponse> {
     return this.fetch("/auth/verify-code", {
       method: "POST",
-      body: JSON.stringify({ email, code }),
+      body: JSON.stringify({ email, code, ...(password ? { password } : {}) }),
+    });
+  }
+
+  /** Password sign-in for accounts that have a password set. */
+  async login(email: string, password: string): Promise<LoginResponse> {
+    return this.fetch("/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    });
+  }
+
+  /** Set (or replace) the caller's password on the authenticated session. */
+  async setPassword(password: string): Promise<{ ok: boolean }> {
+    return this.fetch("/api/auth/set-password", {
+      method: "POST",
+      body: JSON.stringify({ password }),
     });
   }
 

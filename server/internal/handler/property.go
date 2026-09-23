@@ -109,9 +109,12 @@ type PropertyResponse struct {
 	Position    float64        `json:"position"`
 	Archived    bool           `json:"archived"`
 	ArchivedAt  *string        `json:"archived_at"`
-	UsageCount  int64          `json:"usage_count"`
-	CreatedAt   string         `json:"created_at"`
-	UpdatedAt   string         `json:"updated_at"`
+	// Required marks the definition create-enforced: every new human-created
+	// issue must carry a value for it.
+	Required   bool   `json:"required"`
+	UsageCount int64  `json:"usage_count"`
+	CreatedAt  string `json:"created_at"`
+	UpdatedAt  string `json:"updated_at"`
 }
 
 func parsePropertyConfig(raw []byte) PropertyConfig {
@@ -136,6 +139,7 @@ func propertyToResponse(p db.IssueProperty, usageCount int64) PropertyResponse {
 		Config:      parsePropertyConfig(p.Config),
 		Position:    p.Position,
 		Archived:    p.ArchivedAt.Valid,
+		Required:    p.Required,
 		UsageCount:  usageCount,
 		CreatedAt:   timestampToString(p.CreatedAt),
 		UpdatedAt:   timestampToString(p.UpdatedAt),
@@ -157,6 +161,7 @@ func propertyListRowToResponse(row db.ListIssuePropertiesRow) PropertyResponse {
 		Icon:        row.Icon,
 		Config:      row.Config,
 		Position:    row.Position,
+		Required:    row.Required,
 		ArchivedAt:  row.ArchivedAt,
 		CreatedAt:   row.CreatedAt,
 		UpdatedAt:   row.UpdatedAt,
@@ -169,11 +174,13 @@ type CreatePropertyRequest struct {
 	Description string          `json:"description"`
 	Icon        string          `json:"icon"`
 	Config      *PropertyConfig `json:"config"`
+	Required    bool            `json:"required"`
 }
 
 type UpdatePropertyRequest struct {
 	Name        *string         `json:"name"`
 	Description *string         `json:"description"`
+	Required    *bool           `json:"required"`
 	Icon        *string         `json:"icon"`
 	Config      *PropertyConfig `json:"config"`
 	Archived    *bool           `json:"archived"`
@@ -627,6 +634,7 @@ func (h *Handler) CreateProperty(w http.ResponseWriter, r *http.Request) {
 			Description: sanitizeNullBytes(strings.TrimSpace(req.Description)),
 			Icon:        icon,
 			Config:      configJSON,
+			Required:    req.Required,
 		})
 		return err
 	})
@@ -690,6 +698,9 @@ func (h *Handler) UpdateProperty(w http.ResponseWriter, r *http.Request) {
 		}
 
 		params := db.UpdateIssuePropertyParams{ID: idUUID, WorkspaceID: wsUUID}
+		if req.Required != nil {
+			params.Required = pgtype.Bool{Bool: *req.Required, Valid: true}
+		}
 		if req.Name != nil {
 			name, err := validatePropertyName(*req.Name)
 			if err != nil {
@@ -1314,6 +1325,25 @@ func operatorPatternPredicate(pattern propertyOperatorPattern, addArg func(any) 
 // scalar ranges fundamentally cannot use a containment index, and only
 // `contains` gets an indexable prefilter in front of it (see
 // operatorPatternPredicate).
+// singleKeyStringMember reports whether the raw exact-match member is a
+// single-key object {"<definitionId>": "<string>"} — the legacy filter shape —
+// and returns its key and string value. Anything else keeps the plain
+// containment path.
+func singleKeyStringMember(raw json.RawMessage) (def, value string, ok bool) {
+	var obj map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &obj); err != nil || len(obj) != 1 {
+		return "", "", false
+	}
+	for key, val := range obj {
+		var str string
+		if err := json.Unmarshal(val, &str); err != nil {
+			return "", "", false
+		}
+		return key, str, true
+	}
+	return "", "", false
+}
+
 func propertiesFilterPredicate(groups [][]json.RawMessage, addArg func(any) string) string {
 	groupSQL := make([]string, 0, len(groups))
 	for _, alternatives := range groups {
@@ -1325,6 +1355,16 @@ func propertiesFilterPredicate(groups [][]json.RawMessage, addArg func(any) stri
 			}
 			if pattern, ok := parseOperatorPattern(alt); ok {
 				ors = append(ors, operatorPatternPredicate(pattern, addArg))
+				continue
+			}
+			// Legacy scalar values match by containment. A titled link
+			// ({"title", "url"}) stores an object, so exact match also
+			// compares the object's url field: filtering by the href keeps
+			// working after a value gains a title.
+			if def, needle, ok := singleKeyStringMember(alt); ok {
+				ors = append(ors, fmt.Sprintf(
+					"(i.properties @> %s::jsonb OR (jsonb_typeof(i.properties->'%s') = 'object' AND i.properties->'%s'->>'url' = %s))",
+					addArg(string(alt)), def, def, addArg(needle)))
 				continue
 			}
 			ors = append(ors, fmt.Sprintf("i.properties @> %s::jsonb", addArg(string(alt))))

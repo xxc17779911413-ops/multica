@@ -92,6 +92,7 @@ interface PropertyDraft {
   type: IssuePropertyType;
   description: string;
   icon: string;
+  required: boolean;
   options: OptionDraft[];
 }
 
@@ -100,6 +101,7 @@ const EMPTY_DRAFT: PropertyDraft = {
   type: "select",
   description: "",
   icon: "",
+  required: false,
   options: [{ name: "", color: COLOR_PICKER_PRESETS[6] }],
 };
 
@@ -224,6 +226,11 @@ export function PropertiesTab() {
                     {property.archived && (
                       <Badge variant="outline" className="shrink-0 text-micro">
                         {t(($) => $.properties.archived_badge)}
+                      </Badge>
+                    )}
+                    {property.required && (
+                      <Badge variant="outline" className="shrink-0 text-micro">
+                        {t(($) => $.properties.required_badge)}
                       </Badge>
                     )}
                   </div>
@@ -382,6 +389,7 @@ function PropertyEditorDialog({
             type: (property.type as IssuePropertyType) ?? "text",
             description: property.description ?? "",
             icon: property.icon ?? "",
+            required: property.required ?? false,
             options: (property.config.options ?? []).map((option: IssuePropertyOption) => ({
               id: option.id,
               name: option.name,
@@ -423,6 +431,7 @@ function PropertyEditorDialog({
           name: draft.name.trim(),
           description: draft.description.trim(),
           icon: draft.icon,
+          required: draft.required,
           ...(config ? { config } : {}),
         },
         { onSuccess: () => onOpenChange(false), onError },
@@ -435,6 +444,7 @@ function PropertyEditorDialog({
         type: draft.type,
         description: draft.description.trim(),
         icon: draft.icon,
+        required: draft.required,
         ...(config ? { config } : {}),
       },
       { onSuccess: () => onOpenChange(false), onError },
@@ -572,6 +582,20 @@ function PropertyEditorDialog({
                 setDraft((current) => ({ ...current, description: event.target.value }))
               }
               placeholder={t(($) => $.properties.editor.description_placeholder)}
+            />
+          </div>
+          <div className="flex items-center justify-between rounded-md border border-surface-border px-3 py-2">
+            <div className="space-y-0.5">
+              <FieldLabel>{t(($) => $.properties.editor.required)}</FieldLabel>
+              <p className="text-caption text-muted-foreground">
+                {t(($) => $.properties.editor.required_hint)}
+              </p>
+            </div>
+            <Switch
+              checked={draft.required}
+              onCheckedChange={(checked) =>
+                setDraft((current) => ({ ...current, required: checked }))
+              }
             />
           </div>
           {showOptions && (

@@ -537,7 +537,9 @@
       "remove_option": "オプションを削除",
       "cancel": "キャンセル",
       "save": "プロパティを保存",
-      "saving": "保存中..."
+      "saving": "保存中...",
+      "required": "作成時に必須",
+      "required_hint": "新しい課題にはこのプロパティの入力が必須です。"
     },
     "archive_dialog": {
       "title": "プロパティをアーカイブしますか？",
@@ -545,7 +547,8 @@
       "cancel": "キャンセル",
       "confirm": "プロパティをアーカイブ",
       "failed": "プロパティをアーカイブできませんでした"
-    }
+    },
+    "required_badge": "必須"
   },
   "labels": {
     "title": "ラベル",

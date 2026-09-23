@@ -25,6 +25,7 @@ import (
 	"github.com/multica-ai/multica/server/internal/logger"
 	obsmetrics "github.com/multica-ai/multica/server/internal/metrics"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
+	"golang.org/x/crypto/bcrypt"
 )
 
 // SignupError represents signup restriction errors
@@ -110,6 +111,9 @@ func (h *Handler) userToResponse(u db.User) UserResponse {
 type LoginResponse struct {
 	Token string       `json:"token"`
 	User  UserResponse `json:"user"`
+	// MustSetPassword tells the client to force the one-time set-password
+	// screen: true only for a pre-password account signing in with a code.
+	MustSetPassword bool `json:"must_set_password,omitempty"`
 }
 
 type SendCodeRequest struct {
@@ -119,6 +123,10 @@ type SendCodeRequest struct {
 type VerifyCodeRequest struct {
 	Email string `json:"email"`
 	Code  string `json:"code"`
+	// Password is required when this verify registers a NEW account: the
+	// code proves the mailbox, the password becomes the account's only
+	// email sign-in path.
+	Password string `json:"password"`
 }
 
 func generateCode() (string, error) {
@@ -428,6 +436,36 @@ func (h *Handler) VerifyCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	existing, lookupErr := h.Queries.GetUserByEmail(r.Context(), email)
+	existingIsNew := isNotFound(lookupErr)
+	if lookupErr != nil && !existingIsNew {
+		writeError(w, http.StatusInternalServerError, "failed to load user")
+		return
+	}
+	if !existingIsNew && existing.PasswordHash != "" {
+		// Once an account has a password that is its only email sign-in
+		// path; the code flow remains for registration and the one-time
+		// migration bridge.
+		writeJSON(w, http.StatusConflict, map[string]any{
+			"code":  "password_login_required",
+			"error": "this account signs in with a password",
+		})
+		return
+	}
+	needsPassword := existingIsNew && existing.PasswordHash == ""
+	if existingIsNew {
+		if err := validatePassword(req.Password); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]any{
+				"code":  "password_required",
+				"error": err.Error(),
+			})
+			return
+		}
+	}
+
+	// The code is spent only once every gate has passed: a password-less
+	// retry (password_required) must leave the same code usable after the
+	// user fills the password fields.
 	if err := h.Queries.MarkVerificationCodeUsed(r.Context(), dbCode.ID); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to verify code")
 		return
@@ -450,6 +488,21 @@ func (h *Handler) VerifyCode(w http.ResponseWriter, r *http.Request) {
 	}
 	if isNew {
 		obsmetrics.RecordEvent(h.Analytics, h.Metrics, analytics.Signup(uuidToString(user.ID), user.Email, signupSourceFromRequest(r)))
+	}
+	if needsPassword {
+		hash, hashErr := bcrypt.GenerateFromPassword([]byte(req.Password), passwordHashCost)
+		if hashErr != nil {
+			slog.Warn("hash password failed", append(logger.RequestAttrs(r), "error", hashErr, "email", email)...)
+			writeError(w, http.StatusInternalServerError, "failed to set password")
+			return
+		}
+		if _, execErr := h.DB.Exec(r.Context(),
+			`UPDATE "user" SET password_hash = $1, updated_at = now() WHERE id = $2`,
+			string(hash), user.ID); execErr != nil {
+			slog.Warn("persist password failed", append(logger.RequestAttrs(r), "error", execErr, "email", email)...)
+			writeError(w, http.StatusInternalServerError, "failed to set password")
+			return
+		}
 	}
 
 	tokenString, err := h.issueJWT(user)
@@ -477,8 +530,9 @@ func (h *Handler) VerifyCode(w http.ResponseWriter, r *http.Request) {
 
 	slog.Info("user logged in", append(logger.RequestAttrs(r), "user_id", uuidToString(user.ID), "email", user.Email)...)
 	writeJSON(w, http.StatusOK, LoginResponse{
-		Token: tokenString,
-		User:  h.userToResponse(user),
+		Token:           tokenString,
+		User:            h.userToResponse(user),
+		MustSetPassword: !isNew && existing.PasswordHash == "",
 	})
 }
 

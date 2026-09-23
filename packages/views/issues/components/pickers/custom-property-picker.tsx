@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { CalendarDays, Check, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import type { Issue, IssueProperty, IssuePropertyValue } from "@multica/core/types";
-import { hasUnknownActorRef } from "@multica/core/types";
+import { hasUnknownActorRef , isIssuePropertyLinkValue, urlPropertyHref, urlPropertyLabel} from "@multica/core/types";
 import {
   useSetIssueProperty,
   useUnsetIssueProperty,
@@ -342,6 +342,20 @@ export function CustomPropertyValueInput({
           </PickerItem>
         </PropertyPicker>
       );
+    case "url":
+      return (
+        <LinkPropertyEditor
+          property={property}
+          value={value}
+          open={open}
+          onOpenChange={setOpen}
+          onCommit={commit}
+          onClear={clear}
+          emptyLabel={emptyLabel}
+          trigger={valueTrigger}
+          triggerRender={triggerRender}
+        />
+      );
     default:
       return (
         <TextishPropertyEditor
@@ -357,6 +371,114 @@ export function CustomPropertyValueInput({
         />
       );
   }
+}
+
+/** Titled-link editor for the url type: optional title + required href. */
+function LinkPropertyEditor({
+  property,
+  value,
+  open,
+  onOpenChange,
+  onCommit,
+  onClear,
+  emptyLabel,
+  trigger,
+  triggerRender,
+}: {
+  property: IssueProperty;
+  value: IssuePropertyValue | undefined;
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  onCommit: (next: IssuePropertyValue) => void;
+  onClear: () => void;
+  emptyLabel: React.ReactNode;
+  trigger?: React.ReactNode;
+  triggerRender?: React.ReactElement<Record<string, unknown>>;
+}) {
+  const { t } = useT("issues");
+  const [draftTitle, setDraftTitle] = useState("");
+  const [draftUrl, setDraftUrl] = useState("");
+
+  useEffect(() => {
+    if (!open) return;
+    if (typeof value === "string") {
+      setDraftUrl(value);
+      setDraftTitle("");
+    } else if (isIssuePropertyLinkValue(value)) {
+      setDraftUrl(value.url);
+      setDraftTitle(value.title ?? "");
+    } else {
+      setDraftUrl("");
+      setDraftTitle("");
+    }
+  }, [open, value]);
+
+  const href = draftUrl.trim();
+
+  const submit = () => {
+    const title = draftTitle.trim();
+    if (!href) {
+      if (value !== undefined) onClear();
+      onOpenChange(false);
+      return;
+    }
+    // Matches the server's canonical form: a titleless link stays a bare
+    // string so legacy readers and filters keep their meaning.
+    onCommit(title ? { title, url: href } : href);
+    onOpenChange(false);
+  };
+
+  return (
+    <Popover open={open} onOpenChange={onOpenChange}>
+      <PopoverTrigger
+        className={triggerRender ? undefined : "flex items-center gap-1.5 cursor-pointer rounded-xs px-1 -mx-1 hover:bg-accent/30 transition-colors overflow-hidden"}
+        render={triggerRender}
+      >
+        {trigger ?? (value === undefined ? (
+          emptyLabel
+        ) : (
+          <CustomPropertyValueDisplay property={property} value={value} />
+        ))}
+      </PopoverTrigger>
+      <PopoverContent className="w-72 p-2" align="start">
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            submit();
+          }}
+          className="flex flex-col gap-2"
+        >
+          <Input
+            value={draftTitle}
+            onChange={(event) => setDraftTitle(event.target.value)}
+            placeholder={t(($) => $.pickers.custom_property.link_title_placeholder)}
+            className="h-8"
+          />
+          <div className="flex items-center gap-2">
+            <Input
+              autoFocus
+              type="url"
+              value={draftUrl}
+              onChange={(event) => setDraftUrl(event.target.value)}
+              placeholder={t(($) => $.pickers.custom_property.url_placeholder)}
+              className="h-8"
+            />
+            {href && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                aria-label={t(($) => $.pickers.custom_property.open_link)}
+                onClick={() => window.open(href, "_blank", "noopener,noreferrer")}
+              >
+                <ExternalLink className="size-3.5" />
+              </Button>
+            )}
+          </div>
+        </form>
+      </PopoverContent>
+    </Popover>
+  );
 }
 
 /** Popover-with-input editor shared by text / number / url. */
@@ -389,11 +511,9 @@ function TextishPropertyEditor({
   }, [open, value]);
 
   const placeholder =
-    property.type === "url"
-      ? t(($) => $.pickers.custom_property.url_placeholder)
-      : property.type === "number"
-        ? t(($) => $.pickers.custom_property.number_placeholder)
-        : t(($) => $.pickers.custom_property.value_placeholder);
+    property.type === "number"
+      ? t(($) => $.pickers.custom_property.number_placeholder)
+      : t(($) => $.pickers.custom_property.value_placeholder);
 
   const submit = () => {
     const trimmed = draft.trim();
@@ -442,17 +562,6 @@ function TextishPropertyEditor({
             placeholder={placeholder}
             className="h-8"
           />
-          {property.type === "url" && typeof value === "string" && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              aria-label={t(($) => $.pickers.custom_property.open_link)}
-              onClick={() => window.open(value, "_blank", "noopener,noreferrer")}
-            >
-              <ExternalLink className="size-3.5" />
-            </Button>
-          )}
         </form>
       </PopoverContent>
     </Popover>
@@ -552,13 +661,22 @@ export function CustomPropertyValueDisplay({
             : t(($) => $.pickers.custom_property.false_label)}
         </span>
       );
-    case "url":
+    case "url": {
+      const href = urlPropertyHref(value);
+      if (!href) {
+        return (
+          <span className="text-muted-foreground">
+            {t(($) => $.pickers.custom_property.empty)}
+          </span>
+        );
+      }
       return (
         <span className="flex min-w-0 items-center gap-1.5">
           <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground" />
-          <span className="truncate">{String(value)}</span>
+          <span className="truncate">{urlPropertyLabel(value)}</span>
         </span>
       );
+    }
     default:
       return <span className="truncate tabular-nums">{String(value)}</span>;
   }

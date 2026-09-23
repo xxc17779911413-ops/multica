@@ -539,7 +539,9 @@
       "remove_option": "Remove option",
       "cancel": "Cancel",
       "save": "Save property",
-      "saving": "Saving..."
+      "saving": "Saving...",
+      "required": "Required on create",
+      "required_hint": "Every new issue must carry a value for this property."
     },
     "archive_dialog": {
       "title": "Archive property?",
@@ -547,7 +549,8 @@
       "cancel": "Cancel",
       "confirm": "Archive property",
       "failed": "Couldn't archive property"
-    }
+    },
+    "required_badge": "Required"
   },
   "labels": {
     "title": "Labels",

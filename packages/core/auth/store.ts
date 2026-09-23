@@ -37,10 +37,14 @@ export interface AuthState {
    * successful login and by an explicit logout.
    */
   expired: boolean;
+  /** Transient: a pre-password account just signed in by code and must set one. */
+  mustSetPassword: boolean;
 
   retryAuthentication: () => void;
   sendCode: (email: string) => Promise<void>;
-  verifyCode: (email: string, code: string) => Promise<User>;
+  verifyCode: (email: string, code: string, password?: string) => Promise<User>;
+  login: (email: string, password: string) => Promise<User>;
+  setPassword: (password: string) => Promise<void>;
   loginWithGoogle: (code: string, redirectUri: string) => Promise<User>;
   loginWithToken: (token: string) => Promise<User>;
   logout: () => void;
@@ -59,6 +63,7 @@ export function createAuthStore(options: AuthStoreOptions) {
     status: "authenticating",
     retryGeneration: 0,
     expired: false,
+    mustSetPassword: false,
 
     retryAuthentication: () => {
       set((state) => ({
@@ -72,8 +77,8 @@ export function createAuthStore(options: AuthStoreOptions) {
       await api.sendCode(email);
     },
 
-    verifyCode: async (email: string, code: string) => {
-      const { token, user } = await api.verifyCode(email, code);
+    verifyCode: async (email: string, code: string, password?: string) => {
+      const { token, user, must_set_password } = await api.verifyCode(email, code, password);
       if (!cookieAuth) {
         // Token mode: persist for Electron / legacy.
         storage.setItem("multica_token", token);
@@ -81,8 +86,37 @@ export function createAuthStore(options: AuthStoreOptions) {
       }
       onLogin?.();
       identifyAnalytics(user.id, { email: user.email, name: user.name });
-      set({ user, isLoading: false, status: "authenticated", expired: false });
+      set({
+        user,
+        isLoading: false,
+        status: "authenticated",
+        expired: false,
+        mustSetPassword: Boolean(must_set_password),
+      });
       return user;
+    },
+
+    login: async (email: string, password: string) => {
+      const { token, user } = await api.login(email, password);
+      if (!cookieAuth) {
+        storage.setItem("multica_token", token);
+        api.setToken(token);
+      }
+      onLogin?.();
+      identifyAnalytics(user.id, { email: user.email, name: user.name });
+      set({
+        user,
+        isLoading: false,
+        status: "authenticated",
+        expired: false,
+        mustSetPassword: false,
+      });
+      return user;
+    },
+
+    setPassword: async (password: string) => {
+      await api.setPassword(password);
+      set({ mustSetPassword: false });
     },
 
     loginWithGoogle: async (code: string, redirectUri: string) => {

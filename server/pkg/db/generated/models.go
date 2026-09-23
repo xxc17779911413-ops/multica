@@ -857,6 +857,7 @@ type IssueProperty struct {
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 	Icon        string             `json:"icon"`
+	Required    bool               `json:"required"`
 }
 
 type IssuePullRequest struct {
@@ -1618,7 +1619,8 @@ type User struct {
 	Language                pgtype.Text        `json:"language"`
 	ProfileDescription      string             `json:"profile_description"`
 	// User-preferred IANA timezone for report rendering (Viewing tz). NULL means "use the browser-detected tz at render time". Affects dashboards, charts, and any "today" label shown to this user. Does not affect data materialisation — all rollups remain in UTC.
-	Timezone pgtype.Text `json:"timezone"`
+	Timezone     pgtype.Text `json:"timezone"`
+	PasswordHash string      `json:"password_hash"`
 }
 
 type UserComposioConnection struct {

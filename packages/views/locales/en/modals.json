@@ -250,7 +250,8 @@
       "error_daemon_version": "This agent's daemon CLI ({{current}}) is below the required {{min}}. Upgrade the daemon to use Create with agent.",
       "error_unknown": "Failed to submit. Try again.",
       "sub_issue_of": "Sub-issue of {{identifier}}"
-    }
+    },
+    "required_properties_missing": "Fill in the required properties first: {{names}}"
   },
   "mark_duplicate": {
     "title": "Mark as duplicate",

@@ -537,7 +537,9 @@
       "remove_option": "옵션 제거",
       "cancel": "취소",
       "save": "속성 저장",
-      "saving": "저장 중..."
+      "saving": "저장 중...",
+      "required": "생성 시 필수",
+      "required_hint": "새 이슈에 이 속성을 반드시 입력해야 합니다."
     },
     "archive_dialog": {
       "title": "속성을 보관할까요?",
@@ -545,7 +547,8 @@
       "cancel": "취소",
       "confirm": "속성 보관",
       "failed": "속성을 보관하지 못했습니다"
-    }
+    },
+    "required_badge": "필수"
   },
   "labels": {
     "title": "레이블",

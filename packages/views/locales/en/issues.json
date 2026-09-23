@@ -840,6 +840,7 @@
       "false_label": "No",
       "value_placeholder": "Enter value…",
       "url_placeholder": "https://…",
+      "link_title_placeholder": "Link title (optional)",
       "number_placeholder": "0",
       "actor_search_placeholder": "Search members…",
       "open_link": "Open link",
@@ -1135,5 +1136,15 @@
     "unmark": "Not a duplicate",
     "section_title": "Duplicates",
     "unmark_toast": "Reopened as Todo"
+  },
+  "create_issue": {
+    "required_properties_missing": "Fill in the required properties first: {{names}}"
+  },
+  "properties": {
+    "required_badge": "Required",
+    "editor": {
+      "required": "Required on create",
+      "required_hint": "Every new issue must carry a value for this property."
+    }
   }
 }

@@ -805,6 +805,7 @@
       "false_label": "아니요",
       "value_placeholder": "값 입력…",
       "url_placeholder": "https://…",
+      "link_title_placeholder": "링크 제목(선택)",
       "number_placeholder": "0",
       "actor_search_placeholder": "멤버 검색…",
       "open_link": "링크 열기",
@@ -1100,5 +1101,15 @@
     "unmark": "중복 아님",
     "section_title": "중복 항목",
     "unmark_toast": "할 일로 다시 열었습니다"
+  },
+  "create_issue": {
+    "required_properties_missing": "필수 속성을 먼저 입력하세요: {{names}}"
+  },
+  "properties": {
+    "required_badge": "필수",
+    "editor": {
+      "required": "생성 시 필수",
+      "required_hint": "새 이슈에 이 속성을 반드시 입력해야 합니다."
+    }
   }
 }

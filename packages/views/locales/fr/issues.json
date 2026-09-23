@@ -817,6 +817,7 @@
       "false_label": "Non",
       "value_placeholder": "Saisir une valeur…",
       "url_placeholder": "https://…",
+      "link_title_placeholder": "Titre du lien (facultatif)",
       "number_placeholder": "0",
       "actor_search_placeholder": "Rechercher des membres…",
       "open_link": "Ouvrir le lien",
@@ -1112,5 +1113,15 @@
     "unmark": "Pas un doublon",
     "section_title": "Doublons",
     "unmark_toast": "Rouverte en À faire"
+  },
+  "create_issue": {
+    "required_properties_missing": "Renseignez d’abord les propriétés obligatoires : {{names}}"
+  },
+  "properties": {
+    "required_badge": "Obligatoire",
+    "editor": {
+      "required": "Obligatoire à la création",
+      "required_hint": "Chaque nouvelle tâche doit renseigner cette propriété."
+    }
   }
 }

@@ -537,7 +537,9 @@
       "remove_option": "移除选项",
       "cancel": "取消",
       "save": "保存属性",
-      "saving": "保存中..."
+      "saving": "保存中...",
+      "required": "创建必填",
+      "required_hint": "新建任务必须填写该属性。"
     },
     "archive_dialog": {
       "title": "归档属性？",
@@ -545,7 +547,8 @@
       "cancel": "取消",
       "confirm": "归档属性",
       "failed": "归档属性失败"
-    }
+    },
+    "required_badge": "必填"
   },
   "labels": {
     "title": "标签",
