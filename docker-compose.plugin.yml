@@ -18,4 +18,4 @@ services:
       - "0.0.0.0:8082:8080"
 
   frontend:
-    image: multica-web-tf:v1
+    image: multica-web-tf:v2
