@@ -30,6 +30,7 @@ import (
 	"github.com/multica-ai/multica/server/internal/cli"
 	"github.com/multica-ai/multica/server/internal/daemon/execenv"
 	"github.com/multica-ai/multica/server/internal/daemon/repocache"
+	"github.com/multica-ai/multica/server/internal/hindsight"
 	"github.com/multica-ai/multica/server/internal/selfexec"
 	"github.com/multica-ai/multica/server/pkg/agent"
 	"github.com/multica-ai/multica/server/pkg/protocol"
@@ -387,6 +388,7 @@ type Daemon struct {
 	client     *Client
 	repoCache  repoCacheBackend
 	skillCache *SkillBundleCache
+	hindsightCfg *hindsight.Config // nil when memory is disabled
 	logger     *slog.Logger
 
 	// terminalReports is the durable outbox for complete/fail callbacks. The
@@ -709,11 +711,16 @@ func New(cfg Config, logger *slog.Logger) *Daemon {
 	// Tag every daemon HTTP request with the daemon's CLI version so the
 	// server can split logs/metrics by client version (parallel to the CLI).
 	client.SetVersion(cfg.CLIVersion)
+	hsCfg := hindsight.ConfigFromEnv()
+	if hsCfg != nil {
+		logger.Info("hindsight memory enabled", "url", hsCfg.APIURL, "bank", hsCfg.BankID)
+	}
 	d := &Daemon{
 		cfg:                         cfg,
 		client:                      client,
 		repoCache:                   repocache.New(cacheRoot, logger),
 		skillCache:                  NewSkillBundleCache(skillCacheRoot),
+		hindsightCfg:                hsCfg,
 		logger:                      logger,
 		terminalReports:             newTerminalReportStore(cfg),
 		terminalReportWakeup:        make(chan struct{}, 1),
@@ -8426,8 +8433,15 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string, slot i
 		gateCodexResumeToRolloutPresence(&task, &taskCtx, provider, env.CodexHome, taskLog)
 	}
 
+	// Recall relevant memories from Hindsight (no-op when memory is disabled).
+	recallQuery := task.ChatMessage
+	if recallQuery == "" {
+		recallQuery = "workspace context recent tasks"
+	}
+	memoriesBlock := hindsight.FormatMemoriesBlock(hindsight.Recall(ctx, d.hindsightCfg, recallQuery, d.logger))
+
 	// Inject runtime-specific config (meta skill) so the agent discovers .agent_context/.
-	runtimeBrief, err := execenv.InjectRuntimeConfig(env.WorkDir, provider, taskCtx)
+	runtimeBrief, err := execenv.InjectRuntimeConfig(env.WorkDir, provider, taskCtx, memoriesBlock)
 	if err != nil {
 		d.logger.Warn("execenv: inject runtime config failed (non-fatal)", "error", err)
 	}
@@ -8810,7 +8824,7 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string, slot i
 		task.PriorSessionResumeUnavailable = true
 		execOpts.ResumeContinuityNotice = ""
 		taskCtx.PriorSessionResumed = false
-		if freshBrief, briefErr := execenv.InjectRuntimeConfig(env.WorkDir, provider, taskCtx); briefErr != nil {
+		if freshBrief, briefErr := execenv.InjectRuntimeConfig(env.WorkDir, provider, taskCtx, memoriesBlock); briefErr != nil {
 			taskLog.Warn("execenv: re-inject cold runtime config for fresh retry failed (non-fatal)", "error", briefErr)
 		} else {
 			runtimeBrief = freshBrief
@@ -8845,6 +8859,11 @@ func (d *Daemon) runTask(ctx context.Context, task Task, provider string, slot i
 		"duration", elapsed.String(),
 		"tools", tools,
 	)
+	// Retain the task outcome to Hindsight memory (fire-and-forget).
+	if result.Status == "completed" && d.hindsightCfg != nil {
+		content := hindsight.BuildRetainContent(task.WorkspaceID, task.IssueID, agentName, "completed", result.Output)
+		go hindsight.Retain(context.Background(), d.hindsightCfg, content, d.logger)
+	}
 	taskLog.Debug("agent result detail",
 		"status", result.Status,
 		"output_bytes", len(result.Output),
