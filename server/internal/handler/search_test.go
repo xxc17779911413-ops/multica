@@ -1,6 +1,9 @@
 package handler
 
 import (
+	"regexp"
+	"sort"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -539,4 +542,92 @@ func buildSearchQueryForTest(t *testing.T, phrase string, terms []string, num in
 	t.Helper()
 	query, _ := buildSearchQuery(phrase, append([]string(nil), terms...), num, hasNum, includeClosed, []string{"done", "cancelled"})
 	return query
+}
+
+// Regression: the workspace-scoped builder must never leave placeholder gaps.
+// Every $N in the SQL has to be backed by exactly one arg, because pgx sends
+// args positionally and PostgreSQL cannot infer the type of a parameter that
+// is never referenced (SQLSTATE 42P18 -> /api/issues/search 500).
+func TestBuildSearchQueryWithWorkspaceScope_PlaceholdersMatchArgs(t *testing.T) {
+	limit := int64(50)
+	cases := []struct {
+		name                  string
+		phrase                string
+		terms                 []string
+		queryNum              int
+		hasNum                bool
+		includeClosed         bool
+		terminalKeys          []string
+		creationWindowLimit   *int64
+		projectPermissionUser string
+	}{
+		{
+			name:                  "project auth only",
+			phrase:                "chare",
+			terms:                 []string{"chare"},
+			includeClosed:         false,
+			terminalKeys:          []string{"done", "cancelled"},
+			projectPermissionUser: "user-1",
+		},
+		{
+			name:                  "project auth with window",
+			phrase:                "chare",
+			terms:                 []string{"chare"},
+			includeClosed:         false,
+			terminalKeys:          []string{"done"},
+			creationWindowLimit:   &limit,
+			projectPermissionUser: "user-1",
+		},
+		{
+			name:                  "project auth multi term numbered closed",
+			phrase:                "foo bar 42",
+			terms:                 []string{"foo", "bar", "42"},
+			queryNum:              42,
+			hasNum:                true,
+			includeClosed:         true,
+			projectPermissionUser: "user-1",
+		},
+		{
+			name:          "no project auth",
+			phrase:        "chare",
+			terms:         []string{"chare"},
+			includeClosed: false,
+			terminalKeys:  []string{"done"},
+		},
+	}
+
+	re := regexp.MustCompile(`\$(\d+)`)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			query, args := buildSearchQueryWithWorkspaceScope(
+				tc.phrase, tc.terms, tc.queryNum, tc.hasNum, tc.includeClosed,
+				tc.terminalKeys, tc.creationWindowLimit, tc.projectPermissionUser, true,
+			)
+			referenced := map[int]bool{}
+			max := 0
+			for _, m := range re.FindAllStringSubmatch(query, -1) {
+				n, err := strconv.Atoi(m[1])
+				if err != nil {
+					t.Fatalf("bad placeholder %q", m[0])
+				}
+				referenced[n] = true
+				if n > max {
+					max = n
+				}
+			}
+			if max != len(args) {
+				t.Fatalf("highest placeholder $%d but %d args: SQL references and args must line up", max, len(args))
+			}
+			var missing []int
+			for i := 1; i <= len(args); i++ {
+				if !referenced[i] {
+					missing = append(missing, i)
+				}
+			}
+			if len(missing) > 0 {
+				sort.Ints(missing)
+				t.Fatalf("args contain placeholders the SQL never references: %v (dangling args become SQLSTATE 42P18 at runtime)", missing)
+			}
+		})
+	}
 }

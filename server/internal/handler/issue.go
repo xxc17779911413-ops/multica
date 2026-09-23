@@ -855,9 +855,6 @@ func buildSearchQueryWithWorkspaceScope(phrase string, terms []string, queryNum 
 		terminalStatusesParam = nextArg(terminalStatusKeys)
 	}
 
-	limitParam := nextArg(nil)
-	offsetParam := nextArg(nil)
-
 	// Stage one scans this workspace's issues once and retains only the narrow
 	// flags and sort fields needed to choose a page. Do not force this CTE to be
 	// MATERIALIZED: production EXPLAIN showed 28-68% lower execution time after
@@ -921,8 +918,8 @@ func buildSearchQueryWithWorkspaceScope(phrase string, terms []string, queryNum 
 
 	// 2026-09-12 coder(lq): Keep pagination placeholders last because SearchIssues
 	// fills these two positions after dynamic permission parameters are assembled.
-	limitParam = nextArg(nil)
-	offsetParam = nextArg(nil)
+	limitParam := nextArg(nil)
+	offsetParam := nextArg(nil)
 	// PostgreSQL otherwise inlines scalar LATERAL subqueries and recomputes the
 	// LOWER expressions for every flag. The OFFSET 0 fences cache the normalized
 	// title and description per issue row without materializing the whole CTE.
