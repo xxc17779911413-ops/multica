@@ -74,6 +74,10 @@ export function AuthInitializer({
           workspaceCreationDisabled: cfg.workspace_creation_disabled === true,
           // Absent/false on the managed cloud and older servers → section hidden.
           vcsIntegrationAvailable: cfg.vcs_integration_available === true,
+          // Project/task authorization overlay (lc-797 port). The server omits
+          // both fields while the overlay is off, which keeps the legacy UI.
+          projectPermissionsEnabled: cfg.project_permissions_enabled === true,
+          projectPermissionRolloutPhase: cfg.project_permission_rollout_phase,
         });
         configStore.getState().setDaemonConfig({
           daemonServerUrl: cfg.daemon_server_url,
