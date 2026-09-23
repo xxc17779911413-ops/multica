@@ -142,6 +142,17 @@ func runSearchQuery(
 			return fmt.Errorf("set search work_mem: %w", err)
 		}
 	}
+	// The workspace-scoped visibility predicate embeds dozens of EXISTS
+	// subqueries into the candidate scan, inflating the planner's cost estimate
+	// past PostgreSQL 17's jit_above_cost default (100k). JIT then spent 12.6 s
+	// compiling a query whose execution is ~100 ms, so every search tripped the
+	// statement timeout (503). Turn JIT off transaction-locally: this is a
+	// short OLTP read where compiling costs far more than it saves. Tolerate
+	// the SET failing because a server built without JIT support has no `jit`
+	// GUC at all — and no JIT overhead to avoid either.
+	if _, err := tx.Exec(ctx, "SET LOCAL jit = off"); err != nil {
+		slog.Debug("search tx: jit not settable on this server; continuing", "error", err)
+	}
 	// The read-only mode is applied here rather than via TxOptions so we
 	// keep the txStarter interface signature (Begin only) intact. It's
 	// belt-and-suspenders — the search queries only SELECT anyway.

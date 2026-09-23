@@ -153,3 +153,27 @@ func setSearchStatementTimeoutForTest(t *testing.T, v time.Duration) {
 	t.Helper()
 	searchStatementTimeoutOverride = v
 }
+
+// TestRunSearchQuery_DisablesJIT pins the transaction-local jit=off that keeps
+// the workspace-scoped visibility predicate from triggering multi-second JIT
+// compilation. Without it, PostgreSQL compiles the cost-inflated plan for
+// ~12 s and every /api/issues/search request answers 503 after 8 s while the
+// same query executes in ~100 ms once compiled.
+func TestRunSearchQuery_DisablesJIT(t *testing.T) {
+	if testPool == nil {
+		t.Skip("DATABASE_URL not set; skipping live-Postgres search jit test")
+	}
+	var jit string
+	err := runSearchQuery(context.Background(), testPool, "SHOW jit", nil, func(rows pgx.Rows) error {
+		for rows.Next() {
+			return rows.Scan(&jit)
+		}
+		return rows.Err()
+	})
+	if err != nil {
+		t.Fatalf("runSearchQuery: %v", err)
+	}
+	if jit != "off" {
+		t.Fatalf("jit inside search tx = %q, want \"off\"", jit)
+	}
+}
