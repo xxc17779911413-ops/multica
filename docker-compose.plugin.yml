@@ -1,0 +1,21 @@
+# 本地自托管扩展：插件平台 + 时间筛选插件
+# 密钥类配置放 .env（已被 gitignore），本文件可安全提交。
+services:
+  backend:
+    environment:
+      FF_PLUGINS_V1: "true"
+      MULTICA_PLUGIN_SECRET_KEY: ${MULTICA_PLUGIN_SECRET_KEY:?please set MULTICA_PLUGIN_SECRET_KEY in .env}
+      MULTICA_PLUGIN_SURFACE_ORIGIN: ${MULTICA_PLUGIN_SURFACE_ORIGIN:-http://10.182.132.95:8082}
+      MULTICA_PLUGIN_API_URL: ${MULTICA_PLUGIN_API_URL:-http://10.182.132.95:8080/v1}
+      MULTICA_PLUGIN_DEV_ORIGINS: ${MULTICA_PLUGIN_DEV_ORIGINS:-https://host.docker.internal:9090}
+      MULTICA_PLUGIN_DEV_CA: ${MULTICA_PLUGIN_DEV_CA:-/etc/multica/dev-ca.pem}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - /root/multica-plugins/helper/cert.pem:/etc/multica/dev-ca.pem:ro
+    ports: !override
+      - "0.0.0.0:8080:8080"
+      - "0.0.0.0:8082:8080"
+
+  frontend:
+    image: multica-web-tf:v1

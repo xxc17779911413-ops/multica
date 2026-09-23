@@ -1,0 +1,30 @@
+# LAN override — expose frontend/backend to the office network (10.184.0.172).
+# Keep docker-compose.selfhost.yml untouched so `git pull` stays clean.
+#
+# Also applies:
+# - company DNS for internal name resolution (gitlab.xiaopeng.local)
+# - container timezone Asia/Shanghai (aligned log timestamps)
+#
+# Usage:
+#   docker compose -f docker-compose.selfhost.yml -f docker-compose.selfhost.lan.yml up -d
+services:
+  backend:
+    dns:
+      - 10.181.59.32
+      - 10.181.60.32
+    environment:
+      TZ: Asia/Shanghai
+    ports: !override
+      - "0.0.0.0:8080:8080"
+
+  frontend:
+    environment:
+      TZ: Asia/Shanghai
+    volumes:
+      - /usr/share/zoneinfo/Asia/Shanghai:/usr/share/zoneinfo/Asia/Shanghai:ro
+    ports: !override
+      - "0.0.0.0:8081:3000"
+
+  postgres:
+    environment:
+      TZ: Asia/Shanghai
