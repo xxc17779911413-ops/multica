@@ -435,10 +435,16 @@ export function projectGanttIssuesOptions(
   });
 }
 
-export function issueDetailOptions(wsId: string, id: string) {
+export function issueDetailOptions(
+  wsId: string,
+  id: string,
+  includeWorkspaceOwned = true,
+) {
   return queryOptions({
-    queryKey: issueKeys.detail(wsId, id),
-    queryFn: () => api.getIssue(id),
+    queryKey: includeWorkspaceOwned
+      ? issueKeys.detail(wsId, id)
+      : ([...issueKeys.detail(wsId, id), { includeWorkspaceOwned }] as const),
+    queryFn: () => api.getIssue(id, { includeWorkspaceOwned }),
   });
 }
 
@@ -638,4 +644,10 @@ export function issueAttachmentsOptions(issueId: string) {
     queryKey: issueKeys.attachments(issueId),
     queryFn: () => api.listAttachments(issueId),
   });
+}
+
+export function issueListIncludesWorkspaceOwned(key: readonly unknown[]): boolean {
+  const scope = key[key.length - 1];
+  if (!scope || typeof scope !== "object" || Array.isArray(scope)) return true;
+  return (scope as Record<string, unknown>).includeWorkspaceOwned !== false;
 }

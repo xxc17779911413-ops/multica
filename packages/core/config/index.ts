@@ -45,6 +45,8 @@ interface ConfigState {
   // Older handlers accepted the unknown field and returned success while
   // dropping it, so absent must fail closed.
   agentConversationStartersSupported: boolean;
+  issueCreatePropertiesSupported: boolean;
+  commentDeleteKeepRepliesSupported: boolean;
   setCdnConfig: (config: { cdnDomain: string; cdnSigned?: boolean }) => void;
   setAuthConfig: (config: {
     allowSignup: boolean;
@@ -60,9 +62,10 @@ interface ConfigState {
   }) => void;
   setFeatureFlags: (flags?: Record<string, boolean>) => void;
   setServerVersion: (version?: string) => void;
-  setClientVersion: (version?: string) => void;
   setLocalWorktreeSupported: (supported?: boolean) => void;
   setAgentConversationStartersSupported: (supported?: boolean) => void;
+  setIssueCreatePropertiesSupported: (supported?: boolean) => void;
+  setCommentDeleteKeepRepliesSupported: (supported?: boolean) => void;
 }
 
 export const configStore = createStore<ConfigState>((set) => ({
@@ -81,6 +84,8 @@ export const configStore = createStore<ConfigState>((set) => ({
   clientVersion: "",
   localWorktreeSupported: false,
   agentConversationStartersSupported: false,
+  issueCreatePropertiesSupported: false,
+  commentDeleteKeepRepliesSupported: false,
   setCdnConfig: ({ cdnDomain, cdnSigned = false }) => set({ cdnDomain, cdnSigned }),
   setAuthConfig: ({
     allowSignup,
@@ -101,11 +106,14 @@ export const configStore = createStore<ConfigState>((set) => ({
     set({ daemonServerUrl, daemonAppUrl }),
   setFeatureFlags: (flags = {}) => set({ featureFlags: { ...flags } }),
   setServerVersion: (version = "") => set({ serverVersion: version }),
-  setClientVersion: (version = "") => set({ clientVersion: version }),
   setLocalWorktreeSupported: (supported = false) =>
     set({ localWorktreeSupported: supported === true }),
   setAgentConversationStartersSupported: (supported = false) =>
     set({ agentConversationStartersSupported: supported === true }),
+  setIssueCreatePropertiesSupported: (supported = false) =>
+    set({ issueCreatePropertiesSupported: supported === true }),
+  setCommentDeleteKeepRepliesSupported: (supported = false) =>
+    set({ commentDeleteKeepRepliesSupported: supported === true }),
 }));
 
 export function useConfigStore(): ConfigState;

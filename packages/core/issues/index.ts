@@ -20,3 +20,4 @@ export {
   normalizeStatusPatch,
 } from "./status-category";
 export * from "./wakeups";
+export { commentLandingTarget } from "./comment-deletion";

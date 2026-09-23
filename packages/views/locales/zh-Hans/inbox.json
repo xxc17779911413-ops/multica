@@ -78,7 +78,9 @@
     "quick_create_failed": "通过智能体创建失败",
     "task_access_request": "任务权限申请",
     "task_access_granted": "已获得任务权限",
-    "quick_create_unconfirmed": "通过智能体创建结果未确认"
+    "quick_create_unconfirmed": "通过智能体创建结果未确认",
+    "autopilot_paused": "自动驾驶已暂停",
+    "autopilot_quota_exceeded": "自动驾驶配额已用尽"
   },
   "labels": {
     "set_status_to": "状态设为",

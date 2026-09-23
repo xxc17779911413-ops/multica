@@ -1999,7 +1999,7 @@ export function IssueDisplayControls({
   );
   const hasActiveFilters = activeFilterCount > 0;
 
-  const SORT_LABEL_KEY: Record<typeof SORT_OPTIONS[number]["value"], "sort_manual" | "sort_status" | "sort_priority" | "sort_start_date" | "sort_due_date" | "sort_created" | "sort_updated" | "sort_title"> = {
+  const SORT_LABEL_KEY: Record<typeof SORT_OPTIONS[number]["value"], "sort_manual" | "sort_status" | "sort_priority" | "sort_start_date" | "sort_due_date" | "sort_created" | "sort_updated" | "sort_title" | "sort_last_activity"> = {
     position: "sort_manual",
     status: "sort_status",
     priority: "sort_priority",
@@ -2008,6 +2008,8 @@ export function IssueDisplayControls({
     created_at: "sort_created",
     updated_at: "sort_updated",
     title: "sort_title",
+    last_activity: "sort_last_activity",
+  
   };
   const GROUPING_LABEL_KEY: Record<typeof GROUPING_OPTIONS[number]["value"], "group_status" | "group_assignee" | "group_project"> = {
     status: "group_status",

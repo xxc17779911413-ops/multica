@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
+import { errorCode } from "@multica/core/api";
 import { CalendarClock, CalendarDays, ChevronRight, FolderOpen, GitBranch, Maximize2, Minimize2, MoreHorizontal, Pencil, Search, X as XIcon, UserMinus } from "lucide-react";
 
 /**
@@ -174,7 +175,13 @@ export function CreateProjectModal({ onClose }: { onClose: () => void }) {
   const [selectedRepos, setSelectedRepos] = useState<string[]>([]);
   const [repoPopoverOpen, setRepoPopoverOpen] = useState(false);
   const [repoSearch, setRepoSearch] = useState("");
+  // Checkout ref per selected repo URL, absent when the repo starts from its
+  // default branch. Keyed by URL rather than folded into selectedRepos so
+  // toggling a repo off and on again does not silently drop the ref.
+  const [repoRefs, setRepoRefs] = useState<Record<string, string>>({});
   const [customRepoUrl, setCustomRepoUrl] = useState("");
+  const [customRepoRef, setCustomRepoRef] = useState("");
+  const [editingRefFor, setEditingRefFor] = useState<string | null>(null);
   // 2026-08-28 coder(lq): Keep creation-time grants separate from the native
   // form fields until submit; the server persists them atomically with the
   // project row.

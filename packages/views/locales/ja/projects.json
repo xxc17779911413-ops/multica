@@ -26,7 +26,8 @@
     "lead": "リード",
     "created": "作成日",
     "issues": "タスク数",
-    "my_role": "自分のロール"
+    "my_role": "自分のロール",
+    "creator": "作成者"
   },
   "status": {
     "planned": "計画中",

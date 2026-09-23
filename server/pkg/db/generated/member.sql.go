@@ -141,6 +141,7 @@ type ListMembersWithUserRow struct {
 	UserName      string             `json:"user_name"`
 	UserEmail     string             `json:"user_email"`
 	UserAvatarUrl pgtype.Text        `json:"user_avatar_url"`
+	HasLoggedIn   pgtype.Bool        `json:"has_logged_in"`
 }
 
 func (q *Queries) ListMembersWithUser(ctx context.Context, workspaceID pgtype.UUID) ([]ListMembersWithUserRow, error) {
@@ -161,6 +162,7 @@ func (q *Queries) ListMembersWithUser(ctx context.Context, workspaceID pgtype.UU
 			&i.UserName,
 			&i.UserEmail,
 			&i.UserAvatarUrl,
+			&i.HasLoggedIn,
 		); err != nil {
 			return nil, err
 		}

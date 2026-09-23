@@ -26,7 +26,8 @@
     "lead": "리드",
     "created": "생성일",
     "issues": "태스크 수",
-    "my_role": "내 역할"
+    "my_role": "내 역할",
+    "creator": "생성자"
   },
   "status": {
     "planned": "계획됨",

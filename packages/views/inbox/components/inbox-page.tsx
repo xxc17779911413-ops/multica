@@ -57,7 +57,6 @@ import {
   RestrictedIssueAccessFallback,
   issueHighlightMementoKey,
 } from "../../issues/components";
-import { useWorkspaceTaskVisibility } from "../../issues/surface/visibility-context";
 import { useViewStateWriter } from "../../platform";
 import { ErrorBoundary } from "@multica/ui/components/common/error-boundary";
 import { useNavigation, useReportNavigating } from "../../navigation";
@@ -340,6 +339,7 @@ export function InboxPage() {
   // remount. Selection changes don't need it — they remount the detail (key
   // by issue) and a fresh mount with a cleared memento entry lands by itself.
   const [highlightRequestToken, setHighlightRequestToken] = useState(0);
+  const [accessRequestToken, setAccessRequestToken] = useState(0);
   const handleSelect = (item: InboxItem) => {
     const nextKey = item.issue_id ?? item.id;
     // Every click on a notification row is a fresh deep-link intent: clear

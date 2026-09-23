@@ -140,7 +140,10 @@
     "local_pick_failed": "Could not open the directory picker.",
     "local_invalid_dir": "This directory can't be used. Pick another.",
     "local_hint": "Agents on other machines won't see this path — they'll fail to start. Use repos for shared work.",
-    "repos_ref_default": "Default branch"
+    "repos_ref_default": "Default branch",
+    "toast_permission_migration_required": "Project permissions are not initialized. Run the project-permission database migrations, then try again.",
+    "toast_permission_unavailable": "Project permissions are temporarily unavailable. Check the database and backend logs, then try again.",
+    "toast_permission_init_failed": "Project permissions could not be initialized. Check that the project-permission migrations have been applied and review the backend logs."
   },
   "create_issue": {
     "sr_manual": "New Issue",

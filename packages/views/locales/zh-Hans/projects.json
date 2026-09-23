@@ -26,7 +26,8 @@
     "lead": "负责人",
     "created": "创建时间",
     "issues": "任务数",
-    "my_role": "我的角色"
+    "my_role": "我的角色",
+    "creator": "创建人"
   },
   "status": {
     "planned": "计划中",

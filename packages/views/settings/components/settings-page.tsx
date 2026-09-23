@@ -18,10 +18,6 @@ import {
   Blocks,
   CreditCard,
   Server,
-  FlaskConical,
-  ListTodo,
-  MessageCircle,
-  RotateCcw,
   ShieldCheck,
 } from "lucide-react";
 import { useCurrentWorkspace } from "@multica/core/paths";

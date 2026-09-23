@@ -151,3 +151,136 @@ export interface ListProjectResourcesResponse {
   resources: ProjectResource[];
   total: number;
 }
+
+export interface ProjectAccessGrant {
+  id: string;
+  workspace_id: string;
+  project_id: string;
+  issue_id?: string;
+  subject_type: ProjectAccessGrantSubjectType;
+  subject_id?: string;
+  role?: string;
+  permission?: ProjectPermissionReportPermission | string;
+  source: ProjectAccessGrantSource;
+  granted_by?: string;
+  /** Timestamp assigned by the canonical projectauth grant row. */
+  created_at?: string;
+}
+
+export interface ProjectAccessGrantRequest {
+  subject_type: ProjectAccessGrantSubjectType;
+  subject_id?: string;
+  role?: string;
+  permission?: ProjectPermissionReportPermission | string;
+  expires_at?: string;
+}
+
+export interface ProjectPermissionReportParams {
+  project_id?: string;
+  issue_id?: string;
+  user_id?: string;
+  role?: ProjectPermissionReportRole;
+  permission?: ProjectPermissionReportPermission;
+  subject_type?: ProjectAccessGrantSubjectType;
+  subject_id?: string;
+  scope?: "all" | "project" | "issue";
+  limit?: number;
+  offset?: number;
+  /** Records an authorization audit event and returns the exact exported row set. */
+  export?: boolean;
+}
+
+export interface ProjectPermissionReportResponse {
+  rows: ProjectPermissionReportRow[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface ProjectPermissionRole {
+  id: string;
+  workspace_id: string;
+  key: string;
+  name: string;
+  description: string;
+  is_system: boolean;
+  permissions: string[];
+}
+
+export type ProjectPermissionReportRole = string;
+
+export type ProjectPermissionReportPermission =
+  | "project.view"
+  | "project.edit"
+  | "project.issue.create"
+  | "project.issue.comment"
+  | "project.issue.manage"
+  | "project.issue.archive"
+  | "project.agent.use"
+  | "project.member.manage"
+  | "project.settings.manage";
+
+export const PROJECT_PERMISSION_KEYS: ProjectPermissionReportPermission[] = [
+  "project.view",
+  "project.edit",
+  "project.issue.create",
+  "project.issue.comment",
+  "project.issue.manage",
+  "project.issue.archive",
+  "project.agent.use",
+  "project.member.manage",
+  "project.settings.manage",
+];
+
+export interface ProjectPermissionReportRow {
+  scope: "project" | "issue";
+  project_id: string;
+  project_title: string;
+  issue_id?: string;
+  issue_title?: string;
+  user_id: string;
+  user_name: string;
+  user_email: string;
+  subject_type: ProjectAccessGrantSubjectType;
+  subject_id?: string;
+  workspace_role?: ProjectPermissionReportRole;
+  project_role?: ProjectPermissionReportRole;
+  role_scope?: "workspace" | "project" | "task";
+  permission: ProjectPermissionReportPermission;
+  source: string;
+  grant_id?: string;
+  granted_by?: string;
+  created_at?: string;
+  expires_at?: string;
+  source_resource_scope?: "workspace" | "project" | "task";
+  source_resource_id?: string;
+  project_access_mode?: "inherit" | "restricted";
+  policy_version?: number;
+  inherited_from_project: boolean;
+}
+
+export type ProjectAccessGrantSubjectType = "user" | "role" | "organization" | "everyone";
+
+export type ProjectAccessGrantSource = "manual" | "organization" | "everyone" | "migration" | "system" | string;
+
+export type ProjectAuthorizationImportKind = "organizations" | "members";
+
+export interface ProjectAuthorizationOrganization {
+  id: string;
+  workspace_id: string;
+  provider: string;
+  external_id: string;
+  name: string;
+  parent_id?: string;
+  status: string;
+}
+
+export interface ProjectAuthorizationOrganizationMember {
+  organization_id: string;
+  user_id: string;
+  name: string;
+  email: string;
+  avatar_url?: string;
+  workspace_role: "owner" | "admin" | "member" | string;
+  has_logged_in?: boolean;
+}

@@ -246,7 +246,7 @@ export function ProjectAuthorizationOrganizationsTab() {
                   <div className="max-h-80 overflow-auto border-t border-surface-border">
                     <table className="w-full text-caption">
                       <thead><tr className="text-left text-muted-foreground">{Object.keys(previewRows[0] ?? {}).map((key) => <th key={key} className="whitespace-nowrap px-4 py-2 font-medium">{key}</th>)}</tr></thead>
-                      <tbody>{previewRows.slice(0, 100).map((row, index) => <tr key={index} className="border-t border-surface-border">{Object.values(row).map((value, valueIndex) => <td key={valueIndex} className="whitespace-nowrap px-4 py-2">{value || "—"}</td>)}</tr>)}</tbody>
+                      <tbody>{previewRows.slice(0, 100).map((row, index) => <tr key={index} className="border-t border-surface-border">{Object.values(row).map((value, valueIndex) => <td key={valueIndex} className="whitespace-nowrap px-4 py-2">{value ? String(value) : "—"}</td>)}</tr>)}</tbody>
                     </table>
                   </div>
                 ) : <p className="border-t border-surface-border px-4 py-5 text-caption text-muted-foreground">{t(($) => $.project_authorization_organizations.empty)}</p>}

@@ -45,7 +45,14 @@ export const EMPTY_PROJECT_FILTERS: ProjectListFilters = {
 
 // Hideable table columns. Name + status are the always-visible core (status
 // is the project's defining lifecycle field), so they're not in this set.
-export type ProjectColumnKey = "priority" | "progress" | "lead" | "issues" | "created";
+export type ProjectColumnKey =
+  | "priority"
+  | "progress"
+  | "lead"
+  | "issues"
+  | "creator"
+  | "role"
+  | "created";
 
 /** Issues count is opt-in; the rest show by default (matching the prior
  *  compact table). */

@@ -27,7 +27,8 @@
     "lead": "Lead",
     "created": "Created",
     "issues": "Issues",
-    "my_role": "My role"
+    "my_role": "My role",
+    "creator": "Creator"
   },
   "status": {
     "planned": "Planned",

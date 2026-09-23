@@ -189,6 +189,17 @@ export type {
   CreateProjectResourceRequest,
   UpdateProjectResourceRequest,
   ListProjectResourcesResponse,
+  ProjectAccessGrant,
+  ProjectAccessGrantRequest,
+  ProjectPermissionReportParams,
+  ProjectPermissionReportResponse,
+  ProjectPermissionRole,
+  ProjectAuthorizationImportKind,
+  ProjectAccessGrantSubjectType,
+  ProjectAuthorizationOrganization,
+  ProjectAuthorizationOrganizationMember,
+  ProjectPermissionReportRow,
+  ProjectPermissionReportPermission,
 } from "./project";
 export { PROJECT_PERMISSION_KEYS } from "./project";
 export type {
@@ -355,3 +366,9 @@ export type {
 export type { IssueWakeup, WakeupPreview, IssueWakeupSummaryRow } from "./issue-wakeup";
 
 export type { WorkspaceWakeup, WorkspaceWakeupPage, WorkspaceWakeupFilters, WakeupScope } from "./issue-wakeup";
+
+export type {
+  ProjectAuthorizationImportPreview,
+  ProjectAuthorizationImportResult,
+  ProjectAuthorizationDingTalkSyncResult,
+} from "../api/schemas";

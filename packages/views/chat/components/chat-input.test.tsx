@@ -560,6 +560,7 @@ describe("ChatInput project context", () => {
   const sampleProject: ChatProject = {
     id: "project-alpha",
     workspace_id: "ws-1",
+    created_by: null,
     title: "Project Alpha",
     description: null,
     icon: "📘",

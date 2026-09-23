@@ -190,7 +190,7 @@ export function ProjectPermissionRolesTab() {
                         key={permission}
                         className="inline-flex min-h-6 items-center rounded-md border border-surface-border bg-muted/60 px-2 py-0.5 text-caption leading-4 text-foreground"
                       >
-                        {permissionLabel(permission)}
+                        {permissionLabel(permission as ProjectPermissionReportPermission)}
                       </span>
                     ))}
                   </div>
