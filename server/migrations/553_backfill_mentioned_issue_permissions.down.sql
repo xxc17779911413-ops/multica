@@ -1,0 +1,2 @@
+-- 2026-09-05 coder(lq): This data backfill is intentionally irreversible;
+-- deleting by current subscriber state could remove grants created later.

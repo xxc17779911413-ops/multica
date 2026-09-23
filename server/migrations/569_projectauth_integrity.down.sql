@@ -1,0 +1,3 @@
+-- 2026-09-07 coder(lq): Data cleanup is intentionally irreversible; there are
+-- no database constraints to remove because relationships stay application-
+-- managed by repository policy.

@@ -1,0 +1,1 @@
+DROP INDEX CONCURRENTLY IF EXISTS projectauth_organizations_id_uniq;

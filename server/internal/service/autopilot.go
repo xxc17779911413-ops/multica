@@ -40,6 +40,10 @@ type AutopilotService struct {
 	TaskSvc      *TaskService
 	Entitlements entitlement.Provider
 	QuotaMetrics AutopilotQuotaMetrics
+	// 2026-09-05 coder(lq): Let the handler layer persist policy state in the
+	// same transaction as an autopilot-created issue without coupling this
+	// service package to the project authorization implementation.
+	BeforeIssueCommit func(context.Context, pgx.Tx, db.Issue) error
 }
 
 // DefaultAutopilotTriggerTimezone is the timezone used to render Autopilot
@@ -759,6 +763,12 @@ func (s *AutopilotService) dispatchCreateIssue(ctx context.Context, ap db.Autopi
 	})
 	if err != nil {
 		return fmt.Errorf("create issue: %w", err)
+	}
+
+	if s.BeforeIssueCommit != nil {
+		if err := s.BeforeIssueCommit(ctx, tx, issue); err != nil {
+			return fmt.Errorf("before autopilot issue commit: %w", err)
+		}
 	}
 
 	// Fan out the default subscriber template inside the same tx as the

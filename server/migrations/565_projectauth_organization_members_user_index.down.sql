@@ -1,0 +1,1 @@
+DROP INDEX CONCURRENTLY IF EXISTS projectauth_organization_members_user_idx;

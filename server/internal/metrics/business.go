@@ -79,9 +79,15 @@ type BusinessMetrics struct {
 	// the product-source attribution that neither query shape exposes on its
 	// own, including daemon heartbeats, browser polling, and readiness gates.
 	// See labels.go for the closed enum.
-	agentRuntimeLookup            *prometheus.CounterVec
-	issueMetadataMutation         *prometheus.CounterVec
-	issueMetadataMutationDuration *prometheus.HistogramVec
+	issueWindowDecision            *prometheus.CounterVec
+	projectAuthorizationDecision   *prometheus.CounterVec
+	projectAuthorizationShadow     *prometheus.CounterVec
+	projectAuthorizationDuration   *prometheus.HistogramVec
+	projectAuthorizationSlow       *prometheus.CounterVec
+	projectAuthorizationAgentClaim *prometheus.CounterVec
+	agentRuntimeLookup             *prometheus.CounterVec
+	issueMetadataMutation          *prometheus.CounterVec
+	issueMetadataMutationDuration  *prometheus.HistogramVec
 
 	activeMu    sync.Mutex
 	activeTasks map[string]activeTaskLabels
@@ -285,6 +291,30 @@ func NewBusinessMetrics() *BusinessMetrics {
 			Namespace: "multica", Subsystem: "autopilot_quota", Name: "decision_total",
 			Help: "Total autopilot quota admission outcomes.",
 		}, metricLabels("multica_autopilot_quota_decision_total")),
+		issueWindowDecision: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Namespace: "multica", Subsystem: "issue_window", Name: "decision_total",
+			Help: "Total recently-created issue window outcomes by request surface.",
+		}, metricLabels("multica_issue_window_decision_total")),
+		projectAuthorizationDecision: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Namespace: "multica", Subsystem: "projectauth", Name: "decision_total",
+			Help: "Total authorization decisions by bounded action and result.",
+		}, metricLabels("multica_projectauth_decision_total")),
+		projectAuthorizationShadow: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Namespace: "multica", Subsystem: "projectauth", Name: "shadow_comparison_total",
+			Help: "Total shadow comparisons between legacy and candidate authorization decisions.",
+		}, metricLabels("multica_projectauth_shadow_comparison_total")),
+		projectAuthorizationDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Namespace: "multica", Subsystem: "projectauth", Name: "operation_duration_seconds",
+			Help: "Authorization resolver and permission-report duration by bounded surface.", Buckets: chatClaimResumeQueryDurationBuckets,
+		}, metricLabels("multica_projectauth_operation_duration_seconds")),
+		projectAuthorizationSlow: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Namespace: "multica", Subsystem: "projectauth", Name: "slow_operation_total",
+			Help: "Authorization operations slower than the configured local alert threshold.",
+		}, metricLabels("multica_projectauth_slow_operation_total")),
+		projectAuthorizationAgentClaim: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Namespace: "multica", Subsystem: "projectauth", Name: "agent_claim_total",
+			Help: "Agent enqueue and claim authorization results.",
+		}, metricLabels("multica_projectauth_agent_claim_total")),
 		agentRuntimeLookup: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Namespace: "multica", Subsystem: "agent_runtime", Name: "lookup_total",
 			Help: "Total logical agent_runtime lookups by product source and outcome (one per requested id, not per SQL query).",
@@ -351,6 +381,12 @@ func (m *BusinessMetrics) Collectors() []prometheus.Collector {
 		m.entitlementDecision,
 		m.entitlementVersionRegression,
 		m.autopilotQuotaDecision,
+		m.issueWindowDecision,
+		m.projectAuthorizationDecision,
+		m.projectAuthorizationShadow,
+		m.projectAuthorizationDuration,
+		m.projectAuthorizationSlow,
+		m.projectAuthorizationAgentClaim,
 		m.agentRuntimeLookup,
 		m.issueMetadataMutation,
 		m.issueMetadataMutationDuration,
@@ -414,6 +450,74 @@ func (m *BusinessMetrics) RecordEntitlementDecision(gate, action, reason string)
 // is that every read is attributed, and a second entry point is how a call site
 // ends up counted twice or not at all. Both labels are normalized here, so a
 // typo at a call site degrades to "other"/"error" instead of minting a series.
+func normalizeProjectAuthorizationAction(value string) string {
+	switch value {
+	case "resolve", "enqueue", "claim", "write":
+		return value
+	default:
+		return "other"
+	}
+}
+
+func normalizeProjectAuthorizationSurface(value string) string {
+	switch value {
+	case "single", "batch", "list", "search", "dashboard", "export", "preview", "explain":
+		return value
+	default:
+		return "other"
+	}
+}
+
+func normalizeProjectAuthorizationResult(value string) string {
+	switch value {
+	case "allow", "deny", "error", "match_allow", "match_deny", "candidate_allow", "candidate_deny", "disabled":
+		return value
+	default:
+		return "error"
+	}
+}
+
+func (m *BusinessMetrics) RecordProjectAuthorizationDecision(action, result string) {
+	if m != nil {
+		m.projectAuthorizationDecision.WithLabelValues(normalizeProjectAuthorizationAction(action), normalizeProjectAuthorizationResult(result)).Inc()
+	}
+}
+
+func (m *BusinessMetrics) RecordProjectAuthorizationShadow(surface, result string) {
+	if m != nil {
+		m.projectAuthorizationShadow.WithLabelValues(normalizeProjectAuthorizationSurface(surface), normalizeProjectAuthorizationResult(result)).Inc()
+	}
+}
+
+func (m *BusinessMetrics) ObserveProjectAuthorization(surface string, duration time.Duration) {
+	if m == nil || duration < 0 {
+		return
+	}
+	surface = normalizeProjectAuthorizationSurface(surface)
+	m.projectAuthorizationDuration.WithLabelValues(surface).Observe(duration.Seconds())
+	if duration >= 250*time.Millisecond {
+		m.projectAuthorizationSlow.WithLabelValues(surface).Inc()
+	}
+}
+
+func (m *BusinessMetrics) RecordProjectAuthorizationAgentClaim(action, result string) {
+	if m != nil {
+		m.projectAuthorizationAgentClaim.WithLabelValues(normalizeProjectAuthorizationAction(action), normalizeProjectAuthorizationResult(result)).Inc()
+	}
+}
+
+func (m *BusinessMetrics) RecordIssueWindowDecision(action, surface, result string) {
+	if m == nil {
+		return
+	}
+	switch surface {
+	case "direct", "list", "search", "grouped", "table", "children", "plugin", "inbox", "agent_context":
+	default:
+		surface = "other"
+	}
+	m.issueWindowDecision.WithLabelValues(action, surface, result).Inc()
+}
+
 func (m *BusinessMetrics) RecordAgentRuntimeLookup(source, result string) {
 	if m == nil {
 		return

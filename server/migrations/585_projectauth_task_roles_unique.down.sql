@@ -1,0 +1,1 @@
+DROP INDEX CONCURRENTLY IF EXISTS projectauth_task_roles_workspace_key_uidx;

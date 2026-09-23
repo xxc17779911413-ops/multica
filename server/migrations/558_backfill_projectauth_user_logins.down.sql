@@ -1,0 +1,3 @@
+-- 2026-09-06 coder(lq): The backfill is intentionally not reversible per row;
+-- removing these markers would erase legitimate login records written after
+-- migration 460.  Migration rollback is handled by migration 460 itself.

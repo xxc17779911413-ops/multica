@@ -1,0 +1,1 @@
+DROP INDEX CONCURRENTLY IF EXISTS projectauth_issue_policies_workspace_issue_uidx;

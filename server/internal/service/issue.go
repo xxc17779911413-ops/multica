@@ -152,6 +152,8 @@ var ErrActiveDuplicate = errors.New("active duplicate issue exists")
 // their transport's 400 / Lark card error.
 var ErrParentIssueNotFound = errors.New("parent issue not found in this workspace")
 
+var ErrArchivedParentIssue = errors.New("cannot create a child issue under an archived parent")
+
 // ErrProjectNotFound signals that the supplied ProjectID does not exist
 // in the issue's workspace. Cross-workspace project IDs are rejected
 // here so every create entry (HTTP `POST /issues`, Lark `/issue`, future

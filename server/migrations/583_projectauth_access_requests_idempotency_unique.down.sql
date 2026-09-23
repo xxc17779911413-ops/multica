@@ -1,0 +1,1 @@
+DROP INDEX CONCURRENTLY IF EXISTS projectauth_access_requests_workspace_idempotency_uidx;

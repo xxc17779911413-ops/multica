@@ -1,0 +1,1 @@
+DROP TABLE IF EXISTS projectauth_issue_mention_revocations;

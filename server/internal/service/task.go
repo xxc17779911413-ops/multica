@@ -50,6 +50,12 @@ type TaskService struct {
 	// SourceContextStorage is used only by the bounded 30-day cleanup pass for
 	// terminal quick-create captures. Nil disables it where storage is absent.
 	SourceContextStorage SourceContextObjectStore
+	// IssueAgentUseAuthorizer is the task-permission seam used by every
+	// issue-bound enqueue path. It deliberately lives as a callback rather than
+	// importing projectauth here: the service remains usable by self-hosted
+	// deployments with the overlay disabled, while the HTTP composition root
+	// supplies the single EffectiveAccessResolver-backed implementation.
+	IssueAgentUseAuthorizer IssueAgentUseAuthorizer
 	// FeatureFlags is the server-side toggle router. Nil is valid and returns
 	// each call site's default.
 	FeatureFlags *featureflag.Service
@@ -88,6 +94,38 @@ type TaskService struct {
 	analyticsContextMu    sync.Mutex
 	analyticsContextCache map[string]analytics.TaskContext
 	analyticsContextOrder []string
+}
+
+// AuthorizationSubject names the human an agent-use decision is judged by. The
+// originator authorizes the run whenever one exists. A scheduled or webhook
+// autopilot run deliberately carries none: originator_user_id stays NULL while
+// the run is accountable to the human responsible for the firing trigger
+// (MUL-4302). Judging that accountable human keeps the task ACL gate in force
+// instead of refusing an otherwise legitimate run, and the gate still fails
+// closed when neither human exists.
+// 2026-09-20 coder(lq): Requiring a valid originator refused every scheduled
+// autopilot, squad and mention enqueue, because those paths are documented to
+// carry no authorizing human.
+func AuthorizationSubject(originatorUserID, accountableUserID pgtype.UUID) pgtype.UUID {
+	if originatorUserID.Valid {
+		return originatorUserID
+	}
+	return accountableUserID
+}
+
+// IssueAgentUseAuthorizer verifies that the accountable human represented by
+// originatorUserID may run an agent against issue. phase is a stable audit
+// dimension (currently enqueue or claim), never user-controlled text.
+type IssueAgentUseAuthorizer func(ctx context.Context, issue db.Issue, originatorUserID pgtype.UUID, phase string) error
+
+func (s *TaskService) authorizeIssueAgentUse(ctx context.Context, issue db.Issue, originatorUserID pgtype.UUID, phase string) error {
+	if s == nil || s.IssueAgentUseAuthorizer == nil {
+		return nil
+	}
+	if !originatorUserID.Valid {
+		return errors.New("issue task authorization requires an accountable human")
+	}
+	return s.IssueAgentUseAuthorizer(ctx, issue, originatorUserID, phase)
 }
 
 type SourceContextObjectStore interface {
@@ -1286,6 +1324,9 @@ func (s *TaskService) enqueueIssueTaskWithCommentPlan(ctx context.Context, issue
 		return db.AgentTaskQueue{}, err
 	}
 	originatorUserID := attr.UserID
+	if err := s.authorizeIssueAgentUse(ctx, issue, AuthorizationSubject(attr.UserID, attr.AccountableUserID), "enqueue"); err != nil {
+		return db.AgentTaskQueue{}, fmt.Errorf("authorize issue agent use: %w", err)
+	}
 	runtimeMCPOverlay := s.buildRuntimeMCPOverlay(ctx, originatorUserID, agent)
 	attrSource, attrDelegatedFrom, attrEvidenceKind, attrEvidenceRef := attributionCreateParams(attr)
 	createParams := db.CreateAgentTaskParams{
@@ -1457,6 +1498,9 @@ func (s *TaskService) enqueueMentionTaskWithCommentPlan(ctx context.Context, iss
 		return db.AgentTaskQueue{}, err
 	}
 	originatorUserID := attr.UserID
+	if err := s.authorizeIssueAgentUse(ctx, issue, AuthorizationSubject(attr.UserID, attr.AccountableUserID), "enqueue"); err != nil {
+		return db.AgentTaskQueue{}, fmt.Errorf("authorize issue agent use: %w", err)
+	}
 	runtimeMCPOverlay := s.buildRuntimeMCPOverlay(ctx, originatorUserID, agent)
 	attrSource, attrDelegatedFrom, attrEvidenceKind, attrEvidenceRef := attributionCreateParams(attr)
 	task, err := s.Queries.CreateAgentTask(ctx, db.CreateAgentTaskParams{
@@ -6609,6 +6653,9 @@ func (s *TaskService) dispatchDelegatedFailureRecovery(ctx context.Context, targ
 		}
 
 		originator, accountable := delegatedFailureRecoveryAttribution(target)
+		if err := s.authorizeIssueAgentUse(ctx, target.issue, AuthorizationSubject(originator, accountable), "enqueue"); err != nil {
+			return delegatedFailureRecoveryCovered, fmt.Errorf("authorize recovery issue agent use: %w", err)
+		}
 		source := attribution.SourceDelegation
 		if !originator.Valid && !accountable.Valid {
 			source = attribution.SourceUnattributed
