@@ -138,7 +138,10 @@
     "local_pick_failed": "无法打开目录选择器。",
     "local_invalid_dir": "该目录不可用，请重新选择。",
     "local_hint": "其他机器上的智能体看不到这个路径，会启动失败。需要协作请用仓库模式。",
-    "repos_ref_default": "默认分支"
+    "repos_ref_default": "默认分支",
+    "toast_permission_migration_required": "项目权限数据库迁移未完成，请先执行项目权限迁移后重试。",
+    "toast_permission_unavailable": "项目权限暂时不可用，请检查数据库和后端日志后重试。",
+    "toast_permission_init_failed": "项目权限初始化失败，请确认项目权限迁移已完成，并检查后端日志。"
   },
   "create_issue": {
     "sr_manual": "新建任务",
@@ -245,7 +248,8 @@
       "error_daemon_version": "该智能体的守护进程 CLI（{{current}}）低于要求的 {{min}}。请升级守护进程后再使用通过智能体创建。",
       "error_unknown": "提交失败，请重试。",
       "sub_issue_of": "作为 {{identifier}} 的子任务"
-    }
+    },
+    "required_properties_missing": "请先填写必填属性：{{names}}"
   },
   "mark_duplicate": {
     "title": "标记为重复",

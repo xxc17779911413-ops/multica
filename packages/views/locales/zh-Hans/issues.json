@@ -1105,5 +1105,15 @@
     "unmark": "不是重复",
     "section_title": "重复项",
     "unmark_toast": "已重新打开为待办"
+  },
+  "create_issue": {
+    "required_properties_missing": "请先填写必填属性：{{names}}"
+  },
+  "properties": {
+    "required_badge": "必填",
+    "editor": {
+      "required": "创建必填",
+      "required_hint": "新建任务必须填写该属性。"
+    }
   }
 }

@@ -1101,5 +1101,15 @@
     "unmark": "重複ではない",
     "section_title": "重複",
     "unmark_toast": "未着手として再開しました"
+  },
+  "create_issue": {
+    "required_properties_missing": "必須のプロパティを先に入力してください：{{names}}"
+  },
+  "properties": {
+    "required_badge": "必須",
+    "editor": {
+      "required": "作成時に必須",
+      "required_hint": "新しい課題にはこのプロパティの入力が必須です。"
+    }
   }
 }

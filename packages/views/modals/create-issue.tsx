@@ -791,6 +791,25 @@ export function ManualCreatePanel({
       titleEditorRef.current?.focus();
       return;
     }
+    // Required properties gate the submit with the same affordances as a
+    // server rejection: highlight the first one, open its picker, and name
+    // every missing definition in the toast.
+    const missingRequired = workspaceProperties.filter(
+      (property) =>
+        property.required &&
+        !Object.prototype.hasOwnProperty.call(propertyValues, property.id),
+    );
+    const firstMissing = missingRequired[0];
+    if (missingRequired.length > 0 && firstMissing) {
+      setPropertyErrorId(firstMissing.id);
+      setCustomPropertyPickerId(firstMissing.id);
+      toast.error(
+        t(($) => $.create_issue.required_properties_missing, {
+          names: missingRequired.map((property) => property.name).join(", "),
+        }),
+      );
+      return;
+    }
     void composer.submit();
   };
   const submitting = composer.submitting;
@@ -1118,6 +1137,7 @@ export function ManualCreatePanel({
               {workspaceProperties
                 .filter(
                   (property) =>
+                    property.required ||
                     Object.prototype.hasOwnProperty.call(propertyValues, property.id) ||
                     customPropertyPickerId === property.id,
                 )
@@ -1145,6 +1165,9 @@ export function ManualCreatePanel({
                           <>
                             <PropertyIcon property={property} className="size-3.5 text-caption" />
                             <span className="max-w-32 truncate">{property.name}</span>
+                            {property.required && value === undefined && (
+                              <span className="text-destructive">*</span>
+                            )}
                             {value !== undefined && (
                               <span className="max-w-40 truncate text-muted-foreground">
                                 <CustomPropertyValueDisplay property={property} value={value} />
@@ -1313,6 +1336,9 @@ export function ManualCreatePanel({
                           >
                             <PropertyIcon property={property} className="size-3.5 text-caption" />
                             <span className="truncate">{property.name}</span>
+                            {property.required && (
+                              <span className="text-destructive">*</span>
+                            )}
                             {Object.prototype.hasOwnProperty.call(
                               propertyValues,
                               property.id,

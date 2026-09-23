@@ -539,7 +539,9 @@
       "remove_option": "Remove option",
       "cancel": "Cancel",
       "save": "Save property",
-      "saving": "Saving..."
+      "saving": "Saving...",
+      "required": "Required on create",
+      "required_hint": "Every new issue must carry a value for this property."
     },
     "archive_dialog": {
       "title": "Archive property?",
@@ -547,7 +549,8 @@
       "cancel": "Cancel",
       "confirm": "Archive property",
       "failed": "Couldn't archive property"
-    }
+    },
+    "required_badge": "Required"
   },
   "labels": {
     "title": "Labels",
@@ -1345,7 +1348,8 @@
     "expiry_24h": "24 hours",
     "expiry_7d": "7 days",
     "expiry_30d": "30 days",
-    "expiry_never": "Never"
+    "expiry_never": "Never",
+    "not_registered_suffix": " (Not registered)"
   },
   "integrations": {
     "code_title": "Code & repositories",
@@ -1444,5 +1448,63 @@
     "save_failed": "Could not save the role.",
     "deleted": "Role deleted.",
     "delete_failed": "Could not delete the role. It may still be in use."
+  },
+  "project_authorization_organizations": {
+    "title": "Organization Directory",
+    "description": "Browse departments and people, then maintain the directory used for project authorization through DingTalk sync or CSV upload.",
+    "directory_title": "Departments and people",
+    "directory_loading": "Loading organization directory…",
+    "directory_failed": "The organization directory could not be loaded. Try again later.",
+    "directory_empty": "No organization data yet. Sync or upload departments and people first.",
+    "file_import": "Import file",
+    "file_import_title": "Import organization directory",
+    "file_import_description": "Download a template and upload a CSV file to import departments or people.",
+    "sync_dingtalk_button": "Sync DingTalk",
+    "sync_dingtalk_title": "Sync organization directory from DingTalk",
+    "sync_dingtalk_description": "Sync departments and people from the configured DingTalk organization. Updates apply to project authorization immediately.",
+    "close": "Close",
+    "all_people": "All people",
+    "search_people": "Search name or email",
+    "people_count": "{{count}} people",
+    "no_people": "There are no people in this department.",
+    "logged_in": "Logged in",
+    "not_logged_in": "Not logged in",
+    "expand": "Expand department",
+    "collapse": "Collapse department",
+    "import_title": "Sync and upload",
+    "kind": "Import type",
+    "organizations": "Departments",
+    "members": "People",
+    "download_template": "Download template",
+    "download_failed": "Template download failed",
+    "upload_file": "Choose CSV file",
+    "preview": "Preview",
+    "confirm_import": "Import",
+    "preview_title": "Import preview",
+    "rows": "{{count}} rows",
+    "errors": "{{count}} errors",
+    "warnings": "{{count}} warnings",
+    "admin_only": "Only workspace owners and admins can import the directory.",
+    "no_file": "Choose a CSV file first",
+    "import_success": "Directory imported successfully",
+    "import_failed": "Directory import failed",
+    "empty": "There is no data to preview.",
+    "result_title": "Import result",
+    "created": "{{count}} created",
+    "updated": "{{count}} updated",
+    "disabled": "{{count}} disabled",
+    "unmatched": "People not imported ({{count}})",
+    "sync_dingtalk": "Sync all from DingTalk",
+    "sync_success": "DingTalk directory synced",
+    "sync_failed": "DingTalk directory sync failed",
+    "sync_result_title": "DingTalk sync result",
+    "sync_created": "{{count}} departments created",
+    "sync_updated": "{{count}} departments updated",
+    "sync_disabled": "{{count}} departments disabled",
+    "sync_members": "{{count}} member links added",
+    "sync_removed": "{{count}} member links removed",
+    "sync_users_created": "{{count}} users created",
+    "sync_users_matched": "{{count}} existing users matched",
+    "sync_workspace_members": "{{count}} workspace members added"
   }
 }

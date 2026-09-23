@@ -536,7 +536,9 @@
       "remove_option": "Retirer l'option",
       "cancel": "Annuler",
       "save": "Enregistrer la propriété",
-      "saving": "Enregistrement..."
+      "saving": "Enregistrement...",
+      "required": "Obligatoire à la création",
+      "required_hint": "Chaque nouvelle tâche doit renseigner cette propriété."
     },
     "archive_dialog": {
       "title": "Archiver la propriété ?",
@@ -544,7 +546,8 @@
       "cancel": "Annuler",
       "confirm": "Archiver la propriété",
       "failed": "Impossible d'archiver la propriété"
-    }
+    },
+    "required_badge": "Obligatoire"
   },
   "labels": {
     "title": "Étiquettes",

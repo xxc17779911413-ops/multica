@@ -1136,5 +1136,15 @@
     "unmark": "Not a duplicate",
     "section_title": "Duplicates",
     "unmark_toast": "Reopened as Todo"
+  },
+  "create_issue": {
+    "required_properties_missing": "Fill in the required properties first: {{names}}"
+  },
+  "properties": {
+    "required_badge": "Required",
+    "editor": {
+      "required": "Required on create",
+      "required_hint": "Every new issue must carry a value for this property."
+    }
   }
 }

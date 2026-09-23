@@ -537,7 +537,9 @@
       "remove_option": "オプションを削除",
       "cancel": "キャンセル",
       "save": "プロパティを保存",
-      "saving": "保存中..."
+      "saving": "保存中...",
+      "required": "作成時に必須",
+      "required_hint": "新しい課題にはこのプロパティの入力が必須です。"
     },
     "archive_dialog": {
       "title": "プロパティをアーカイブしますか？",
@@ -545,7 +547,8 @@
       "cancel": "キャンセル",
       "confirm": "プロパティをアーカイブ",
       "failed": "プロパティをアーカイブできませんでした"
-    }
+    },
+    "required_badge": "必須"
   },
   "labels": {
     "title": "ラベル",
@@ -1338,7 +1341,8 @@
     "expiry_24h": "24時間",
     "expiry_7d": "7日",
     "expiry_30d": "30日",
-    "expiry_never": "無期限"
+    "expiry_never": "無期限",
+    "not_registered_suffix": "（未登録）"
   },
   "integrations": {
     "code_title": "コードとリポジトリ",
@@ -1437,5 +1441,63 @@
     "save_failed": "ロールを保存できませんでした。",
     "deleted": "ロールを削除しました。",
     "delete_failed": "ロールを削除できません。使用中の可能性があります。"
+  },
+  "project_authorization_organizations": {
+    "title": "組織ディレクトリ",
+    "description": "部門とユーザーを参照し、DingTalk 同期または CSV アップロードでプロジェクト権限用の組織ディレクトリを管理します。",
+    "directory_title": "部門とユーザー",
+    "directory_loading": "組織ディレクトリを読み込み中…",
+    "directory_failed": "組織ディレクトリを読み込めませんでした。後でもう一度お試しください。",
+    "directory_empty": "組織データがありません。先に部門とユーザーを同期またはアップロードしてください。",
+    "file_import": "ファイルをインポート",
+    "file_import_title": "組織ディレクトリをファイルからインポート",
+    "file_import_description": "テンプレートをダウンロードし、CSV ファイルをアップロードして部門またはユーザーをインポートします。",
+    "sync_dingtalk_button": "DingTalk 同期",
+    "sync_dingtalk_title": "DingTalk から組織ディレクトリを同期",
+    "sync_dingtalk_description": "設定済みの DingTalk 組織から部門とユーザーを同期します。更新内容はすぐにプロジェクト権限へ反映されます。",
+    "close": "閉じる",
+    "all_people": "すべてのユーザー",
+    "search_people": "名前またはメールを検索",
+    "people_count": "{{count}} 人",
+    "no_people": "この部門にユーザーはいません。",
+    "logged_in": "ログイン済み",
+    "not_logged_in": "未ログイン",
+    "expand": "部門を展開",
+    "collapse": "部門を折りたたむ",
+    "import_title": "同期とアップロード",
+    "kind": "インポート種別",
+    "organizations": "部門",
+    "members": "ユーザー",
+    "download_template": "テンプレートをダウンロード",
+    "download_failed": "テンプレートをダウンロードできませんでした",
+    "upload_file": "CSV ファイルを選択",
+    "preview": "プレビュー",
+    "confirm_import": "インポート",
+    "preview_title": "インポートプレビュー",
+    "rows": "{{count}} 行",
+    "errors": "エラー {{count}} 件",
+    "warnings": "警告 {{count}} 件",
+    "admin_only": "組織ディレクトリをインポートできるのはワークスペースの owner と admin のみです。",
+    "no_file": "先に CSV ファイルを選択してください",
+    "import_success": "組織ディレクトリをインポートしました",
+    "import_failed": "組織ディレクトリをインポートできませんでした",
+    "empty": "プレビューできるデータがありません。",
+    "result_title": "インポート結果",
+    "created": "{{count}} 件追加",
+    "updated": "{{count}} 件更新",
+    "disabled": "{{count}} 件無効化",
+    "unmatched": "インポートされなかったユーザー（{{count}}）",
+    "sync_dingtalk": "DingTalk から全件同期",
+    "sync_success": "DingTalk 組織ディレクトリを同期しました",
+    "sync_failed": "DingTalk 組織ディレクトリを同期できませんでした",
+    "sync_result_title": "DingTalk 同期結果",
+    "sync_created": "部門 {{count}} 件追加",
+    "sync_updated": "部門 {{count}} 件更新",
+    "sync_disabled": "部門 {{count}} 件無効化",
+    "sync_members": "所属関係 {{count}} 件追加",
+    "sync_removed": "所属関係 {{count}} 件削除",
+    "sync_users_created": "ユーザー {{count}} 件作成",
+    "sync_users_matched": "既存ユーザー {{count}} 件一致",
+    "sync_workspace_members": "ワークスペースメンバー {{count}} 件追加"
   }
 }

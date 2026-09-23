@@ -140,7 +140,10 @@
     "local_pick_failed": "Could not open the directory picker.",
     "local_invalid_dir": "This directory can't be used. Pick another.",
     "local_hint": "Agents on other machines won't see this path — they'll fail to start. Use repos for shared work.",
-    "repos_ref_default": "Default branch"
+    "repos_ref_default": "Default branch",
+    "toast_permission_migration_required": "Project permissions are not initialized. Run the project-permission database migrations, then try again.",
+    "toast_permission_unavailable": "Project permissions are temporarily unavailable. Check the database and backend logs, then try again.",
+    "toast_permission_init_failed": "Project permissions could not be initialized. Check that the project-permission migrations have been applied and review the backend logs."
   },
   "create_issue": {
     "sr_manual": "New Issue",
@@ -247,7 +250,8 @@
       "error_daemon_version": "This agent's daemon CLI ({{current}}) is below the required {{min}}. Upgrade the daemon to use Create with agent.",
       "error_unknown": "Failed to submit. Try again.",
       "sub_issue_of": "Sub-issue of {{identifier}}"
-    }
+    },
+    "required_properties_missing": "Fill in the required properties first: {{names}}"
   },
   "mark_duplicate": {
     "title": "Mark as duplicate",

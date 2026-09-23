@@ -537,7 +537,9 @@
       "remove_option": "移除选项",
       "cancel": "取消",
       "save": "保存属性",
-      "saving": "保存中..."
+      "saving": "保存中...",
+      "required": "创建必填",
+      "required_hint": "新建任务必须填写该属性。"
     },
     "archive_dialog": {
       "title": "归档属性？",
@@ -545,7 +547,8 @@
       "cancel": "取消",
       "confirm": "归档属性",
       "failed": "归档属性失败"
-    }
+    },
+    "required_badge": "必填"
   },
   "labels": {
     "title": "标签",
@@ -1338,7 +1341,8 @@
     "expiry_24h": "24 小时",
     "expiry_7d": "7 天",
     "expiry_30d": "30 天",
-    "expiry_never": "永久有效"
+    "expiry_never": "永久有效",
+    "not_registered_suffix": "(未注册)"
   },
   "integrations": {
     "code_title": "代码与仓库",
@@ -1437,5 +1441,63 @@
     "save_failed": "角色保存失败。",
     "deleted": "角色已删除。",
     "delete_failed": "角色删除失败，可能仍在使用中。"
+  },
+  "project_authorization_organizations": {
+    "title": "组织目录",
+    "description": "浏览部门和人员，并通过钉钉同步或 CSV 上传维护用于项目授权的组织目录。",
+    "directory_title": "部门与人员",
+    "directory_loading": "正在加载组织目录…",
+    "directory_failed": "组织目录加载失败，请稍后重试。",
+    "directory_empty": "暂无组织数据，请先同步或上传部门和人员。",
+    "file_import": "文件导入",
+    "file_import_title": "从文件导入组织目录",
+    "file_import_description": "下载模板并上传 CSV 文件，导入部门或人员数据。",
+    "sync_dingtalk_button": "钉钉同步",
+    "sync_dingtalk_title": "从钉钉同步组织目录",
+    "sync_dingtalk_description": "从已配置的钉钉组织架构同步部门和人员，更新后会立即用于项目授权。",
+    "close": "关闭",
+    "all_people": "全部人员",
+    "search_people": "搜索姓名或邮箱",
+    "people_count": "{{count}} 人",
+    "no_people": "当前部门没有人员。",
+    "logged_in": "已登录",
+    "not_logged_in": "未登录",
+    "expand": "展开部门",
+    "collapse": "收起部门",
+    "import_title": "同步与上传",
+    "kind": "导入类型",
+    "organizations": "部门",
+    "members": "人员",
+    "download_template": "下载模板",
+    "download_failed": "模板下载失败",
+    "upload_file": "选择 CSV 文件",
+    "preview": "预览",
+    "confirm_import": "确认导入",
+    "preview_title": "导入预览",
+    "rows": "共 {{count}} 行",
+    "errors": "错误 {{count}} 条",
+    "warnings": "警告 {{count}} 条",
+    "admin_only": "只有工作区所有者或管理员可以导入组织目录。",
+    "no_file": "请先选择 CSV 文件",
+    "import_success": "组织目录导入成功",
+    "import_failed": "组织目录导入失败",
+    "empty": "没有可预览的数据。",
+    "result_title": "导入结果",
+    "created": "新增 {{count}} 条",
+    "updated": "更新 {{count}} 条",
+    "disabled": "停用 {{count}} 条",
+    "unmatched": "未导入人员（{{count}}）",
+    "sync_dingtalk": "从钉钉全量同步",
+    "sync_success": "钉钉组织目录同步成功",
+    "sync_failed": "钉钉组织目录同步失败",
+    "sync_result_title": "钉钉同步结果",
+    "sync_created": "新增部门 {{count}} 个",
+    "sync_updated": "更新部门 {{count}} 个",
+    "sync_disabled": "停用部门 {{count}} 个",
+    "sync_members": "新增成员关系 {{count}} 条",
+    "sync_removed": "移除成员关系 {{count}} 条",
+    "sync_users_created": "新建用户 {{count}} 个",
+    "sync_users_matched": "匹配已有用户 {{count}} 个",
+    "sync_workspace_members": "加入工作区成员 {{count}} 个"
   }
 }
