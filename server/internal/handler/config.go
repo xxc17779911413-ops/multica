@@ -121,6 +121,8 @@ func (h *Handler) GetConfig(w http.ResponseWriter, r *http.Request) {
 		// running, the save gate is running with it.
 		LocalWorktreeSupported:             true,
 		AgentConversationStartersSupported: true,
+		IssueCreatePropertiesSupported:     true,
+		CommentDeleteKeepRepliesSupported:  true,
 		AllowSignup:                        os.Getenv("ALLOW_SIGNUP") != "false",
 		GoogleClientID:                     os.Getenv("GOOGLE_CLIENT_ID"),
 		WorkspaceCreationDisabled:          os.Getenv("DISABLE_WORKSPACE_CREATION") == "true",
