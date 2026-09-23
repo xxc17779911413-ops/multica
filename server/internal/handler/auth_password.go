@@ -7,36 +7,17 @@ import (
 	"net/http"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/multica-ai/multica/server/internal/auth"
 	"github.com/multica-ai/multica/server/internal/logger"
 	"golang.org/x/crypto/bcrypt"
 )
 
-const (
-	minPasswordRunes = 8
-	// bcrypt hashes at most 72 bytes of input; longer passwords must be
-	// rejected, not silently truncated.
-	maxPasswordBytes = 72
-	passwordHashCost = 12
-)
-
 // loginTimingPadding is compared against when the email is unknown so an
 // attacker cannot distinguish "no such account" from "wrong password" by
 // timing. Generated once per process.
 var loginTimingPadding, _ = bcrypt.GenerateFromPassword(
-	[]byte("multica-login-timing-padding"), passwordHashCost)
-
-func validatePassword(password string) error {
-	if utf8.RuneCountInString(password) < minPasswordRunes {
-		return errors.New("password must be at least 8 characters")
-	}
-	if len(password) > maxPasswordBytes {
-		return errors.New("password must be at most 72 bytes")
-	}
-	return nil
-}
+	[]byte("multica-login-timing-padding"), auth.PasswordHashCost)
 
 type LoginRequest struct {
 	Email    string `json:"email"`
@@ -137,21 +118,88 @@ func (h *Handler) SetPassword(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	if err := validatePassword(req.Password); err != nil {
+	if err := auth.ValidatePassword(req.Password); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), passwordHashCost)
+	hash, err := auth.HashPassword(req.Password)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to hash password")
 		return
 	}
 	if _, err := h.DB.Exec(r.Context(),
 		`UPDATE "user" SET password_hash = $1, updated_at = now() WHERE id = $2`,
-		string(hash), parseUUID(userID)); err != nil {
+		hash, parseUUID(userID)); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to save password")
 		return
 	}
 	slog.Info("password set", append(logger.RequestAttrs(r), "user_id", userID)...)
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+type ChangePasswordRequest struct {
+	CurrentPassword string `json:"current_password"`
+	NewPassword     string `json:"new_password"`
+}
+
+// ChangePassword rotates the caller's password. Session possession is the
+// authorization, but the current password is still required so a borrowed
+// session cannot lock the owner out of their own account.
+func (h *Handler) ChangePassword(w http.ResponseWriter, r *http.Request) {
+	userID, ok := requireUserID(w, r)
+	if !ok {
+		return
+	}
+	var req ChangePasswordRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if req.CurrentPassword == "" || req.NewPassword == "" {
+		writeError(w, http.StatusBadRequest, "current and new password are required")
+		return
+	}
+	if err := auth.ValidatePassword(req.NewPassword); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	var currentHash string
+	if err := h.DB.QueryRow(r.Context(),
+		`SELECT password_hash FROM "user" WHERE id = $1`, parseUUID(userID)).Scan(&currentHash); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to load user")
+		return
+	}
+	// Pre-password accounts (bridge not completed yet) may set one freely:
+	// an authenticated session is the only proof they can present.
+	if currentHash != "" {
+		if err := bcrypt.CompareHashAndPassword([]byte(currentHash), []byte(req.CurrentPassword)); err != nil {
+			writeJSON(w, http.StatusUnauthorized, map[string]any{
+				"code":  "invalid_password",
+				"error": "current password is incorrect",
+			})
+			return
+		}
+		if bcrypt.CompareHashAndPassword([]byte(currentHash), []byte(req.NewPassword)) == nil {
+			writeJSON(w, http.StatusBadRequest, map[string]any{
+				"code":  "password_unchanged",
+				"error": "new password must differ from the current one",
+			})
+			return
+		}
+	}
+
+	hash, err := auth.HashPassword(req.NewPassword)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to hash password")
+		return
+	}
+	if _, err := h.DB.Exec(r.Context(),
+		`UPDATE "user" SET password_hash = $1, updated_at = now() WHERE id = $2`,
+		hash, parseUUID(userID)); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to save password")
+		return
+	}
+	slog.Info("password changed", append(logger.RequestAttrs(r), "user_id", userID)...)
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }

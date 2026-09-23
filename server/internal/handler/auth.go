@@ -25,7 +25,6 @@ import (
 	"github.com/multica-ai/multica/server/internal/logger"
 	obsmetrics "github.com/multica-ai/multica/server/internal/metrics"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
-	"golang.org/x/crypto/bcrypt"
 )
 
 // SignupError represents signup restriction errors
@@ -454,7 +453,7 @@ func (h *Handler) VerifyCode(w http.ResponseWriter, r *http.Request) {
 	}
 	needsPassword := existingIsNew && existing.PasswordHash == ""
 	if existingIsNew {
-		if err := validatePassword(req.Password); err != nil {
+		if err := auth.ValidatePassword(req.Password); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]any{
 				"code":  "password_required",
 				"error": err.Error(),
@@ -490,7 +489,7 @@ func (h *Handler) VerifyCode(w http.ResponseWriter, r *http.Request) {
 		obsmetrics.RecordEvent(h.Analytics, h.Metrics, analytics.Signup(uuidToString(user.ID), user.Email, signupSourceFromRequest(r)))
 	}
 	if needsPassword {
-		hash, hashErr := bcrypt.GenerateFromPassword([]byte(req.Password), passwordHashCost)
+		hash, hashErr := auth.HashPassword(req.Password)
 		if hashErr != nil {
 			slog.Warn("hash password failed", append(logger.RequestAttrs(r), "error", hashErr, "email", email)...)
 			writeError(w, http.StatusInternalServerError, "failed to set password")
@@ -498,7 +497,7 @@ func (h *Handler) VerifyCode(w http.ResponseWriter, r *http.Request) {
 		}
 		if _, execErr := h.DB.Exec(r.Context(),
 			`UPDATE "user" SET password_hash = $1, updated_at = now() WHERE id = $2`,
-			string(hash), user.ID); execErr != nil {
+			hash, user.ID); execErr != nil {
 			slog.Warn("persist password failed", append(logger.RequestAttrs(r), "error", execErr, "email", email)...)
 			writeError(w, http.StatusInternalServerError, "failed to set password")
 			return
