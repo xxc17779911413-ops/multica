@@ -651,7 +651,9 @@
     "tasks_count_other": "실행 {{count}}개",
     "chip_agents_working_other": "작업 중인 에이전트 {{count}}개",
     "issues_count_other": "태스크 {{count}}개",
-    "chip_agents_working_unknown": "작업 중인 에이전트: —"
+    "chip_agents_working_unknown": "작업 중인 에이전트: —",
+    "open_conversation": "대화 열기",
+    "open_conversation_hint": "행을 클릭하면 대화가 열립니다"
   },
   "filtered_empty": {
     "title": "필터 조건에 맞는 태스크가 없습니다",

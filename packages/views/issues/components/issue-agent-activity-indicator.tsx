@@ -17,6 +17,7 @@ import { cn } from "@multica/ui/lib/utils";
 import type { AvatarSize } from "@multica/ui/lib/avatar-size";
 import { AgentAvatarStack } from "../../agents/components/agent-avatar-stack";
 import { AgentActivityHoverContent } from "../../agents/components/agent-activity-hover-content";
+import { TranscriptButton } from "../../common/task-transcript";
 import { selectIssueTasks, type IssueTaskGroups } from "../surface/activity";
 import { useT } from "../../i18n";
 import { useWakeupText } from "./wakeup-presentation";
@@ -118,6 +119,18 @@ export const IssueAgentActivityIndicator = memo(
       select,
     });
 
+    // Click-through contract: the badge and any row in the card open the
+    // run's conversation (transcript dialog). Mirrors issue-agent-header-chip:
+    // this surface owns the dialog, the triggers only report open requests.
+    const [openedTranscript, setOpenedTranscript] = useState<{
+      task: AgentTask;
+      fromKeyboard: boolean;
+    } | null>(null);
+    const openTranscript = (task: AgentTask, fromKeyboard = false) => {
+      setOpenedTranscript({ task, fromKeyboard });
+      setOpen(false);
+    };
+
     const { agentIds, opacity } = useMemo(() => {
       // Stack heads: prefer running. If 0 running, fall back to queued.
       // Each case is visually distinct (running gets shimmer, queued gets
@@ -137,7 +150,15 @@ export const IssueAgentActivityIndicator = memo(
     const hasTasks = agentIds.length > 0;
     const hoverTasks = [...groups.running, ...groups.queued];
     const wakeupTriggered = hoverTasks.some((task) => !!task.wakeup_id);
-    if (!hasTasks && !wakeupCount) return null;
+    const primaryTask = groups.running[0] ?? groups.queued[0] ?? null;
+    // Prefer the freshest row for the open task so a running task's status
+    // stays live inside the dialog; fall back to the launch-time snapshot
+    // once the task drops out of the active set.
+    const openedTranscriptTask = openedTranscript
+      ? (hoverTasks.find((task) => task.id === openedTranscript.task.id) ??
+        openedTranscript.task)
+      : null;
+    if (!hasTasks && !wakeupCount && !openedTranscriptTask) return null;
     const isRunning = opacity === "full";
     const waitingLabel =
       wakeups[0]?.kind === "event"
@@ -150,6 +171,10 @@ export const IssueAgentActivityIndicator = memo(
         ? t(($) => $.agent_activity.status_running)
         : t(($) => $.agent_activity.status_queued)
       : waitingLabel;
+    const openHint = hasTasks
+      ? ` · ${t(($) => $.agent_activity.open_conversation)}`
+      : "";
+    const triggerLabel = `${label}${wakeupTriggered ? ` · ${t(($) => $.wakeups.triggered_by_wakeup)}` : ""}${wakeupCount ? ` · ${t(($) => $.wakeups.upcoming, { count: wakeupCount })}` : ""}${openHint}`;
 
     const badge = hasTasks ? (
       <>
@@ -201,13 +226,49 @@ export const IssueAgentActivityIndicator = memo(
       </>
     );
 
+    const transcriptDialog = openedTranscriptTask ? (
+      <TranscriptButton
+        task={openedTranscriptTask}
+        agentName=""
+        isLive={openedTranscriptTask.status === "running"}
+        title={t(($) => $.execution_log.transcript_tooltip)}
+        renderButton={false}
+        open
+        finalFocus={openedTranscript?.fromKeyboard === true}
+        onOpenChange={(open) => {
+          if (!open) setOpenedTranscript(null);
+        }}
+      />
+    ) : null;
+
     if (!hoverCard) {
       return (
-        <span className="inline-flex shrink-0 items-center gap-1">{badge}</span>
+        <>
+          {hasTasks && primaryTask ? (
+            <button
+              type="button"
+              aria-label={triggerLabel}
+              title={t(($) => $.agent_activity.open_conversation)}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                openTranscript(primaryTask, e.detail === 0);
+              }}
+              className="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-sm focus-visible:outline-2 focus-visible:outline-ring"
+            >
+              {badge}
+            </button>
+          ) : (
+            <span className="inline-flex shrink-0 items-center gap-1">{badge}</span>
+          )}
+          {transcriptDialog}
+        </>
       );
     }
 
     return (
+      <>
+      {hasTasks || wakeupCount ? (
       <HoverCard open={open} onOpenChange={setOpen}>
         <HoverCardTrigger
           delay={OPEN_DELAY_MS}
@@ -215,17 +276,49 @@ export const IssueAgentActivityIndicator = memo(
           render={
             <span
               tabIndex={0}
-              aria-label={`${label}${wakeupTriggered ? ` · ${t(($) => $.wakeups.triggered_by_wakeup)}` : ""}${wakeupCount ? ` · ${t(($) => $.wakeups.upcoming, { count: wakeupCount })}` : ""}`}
+              role={hasTasks ? "button" : undefined}
+              aria-label={triggerLabel}
+              title={hasTasks ? t(($) => $.agent_activity.open_conversation) : undefined}
               onFocus={() => setOpen(true)}
               onBlur={() => setOpen(false)}
-              className="inline-flex shrink-0 items-center gap-1 rounded-sm focus-visible:outline-2 focus-visible:outline-ring"
+              onClick={
+                hasTasks && primaryTask
+                  ? (e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      openTranscript(primaryTask, e.detail === 0);
+                    }
+                  : undefined
+              }
+              onKeyDown={
+                hasTasks && primaryTask
+                  ? (e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        openTranscript(primaryTask, true);
+                      }
+                    }
+                  : undefined
+              }
+              className={`inline-flex shrink-0 items-center gap-1 rounded-sm focus-visible:outline-2 focus-visible:outline-ring${hasTasks ? " cursor-pointer" : ""}`}
             />
           }
         >
           {badge}
         </HoverCardTrigger>
         <HoverCardContent align="end" className="w-72">
-          {hasTasks && <AgentActivityHoverContent tasks={hoverTasks} />}
+          {hasTasks && (
+            <AgentActivityHoverContent
+              tasks={hoverTasks}
+              onOpenTranscript={(task) => openTranscript(task, false)}
+            />
+          )}
+          {hasTasks && (
+            <p className="mt-2 border-t border-border pt-2 text-micro text-muted-foreground">
+              {t(($) => $.agent_activity.open_conversation_hint)}
+            </p>
+          )}
           {wakeupCount > 0 && (
             <div
               className={cn(
@@ -260,6 +353,9 @@ export const IssueAgentActivityIndicator = memo(
           )}
         </HoverCardContent>
       </HoverCard>
+      ) : null}
+      {transcriptDialog}
+      </>
     );
   },
 );

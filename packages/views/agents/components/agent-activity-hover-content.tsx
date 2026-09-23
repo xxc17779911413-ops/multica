@@ -65,9 +65,13 @@ function AgentActivityTaskRow({
   now,
   agentById,
   runtimeById,
+  onOpen,
 }: {
   task: AgentTask;
   now: number;
+  /** When provided the whole row becomes a button that opens the run's
+   *  conversation (transcript dialog). Absent → the row stays passive. */
+  onOpen?: (task: AgentTask) => void;
 } & ActivityLookups) {
   const { t } = useT("issues");
   const { getActorName, getActorInitials, getActorAvatarUrl } = useActorName();
@@ -100,8 +104,8 @@ function AgentActivityTaskRow({
     ? (task.started_at ?? task.dispatched_at ?? task.created_at)
     : task.created_at;
 
-  return (
-    <div className="flex items-center gap-2 text-caption">
+  const body = (
+    <>
       <ActorAvatarBase
         name={getActorName("agent", task.agent_id)}
         initials={getActorInitials("agent", task.agent_id)}
@@ -124,7 +128,19 @@ function AgentActivityTaskRow({
           {formatDuration(startedFrom, now)}
         </span>
       </span>
-    </div>
+    </>
+  );
+  if (!onOpen) {
+    return <div className="flex items-center gap-2 text-caption">{body}</div>;
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => onOpen(task)}
+      className="-mx-1 flex w-[calc(100%+0.5rem)] items-center gap-2 rounded-sm px-1 text-left text-caption transition-colors hover:bg-accent/60 focus-visible:outline-2 focus-visible:outline-ring"
+    >
+      {body}
+    </button>
   );
 }
 
@@ -137,7 +153,11 @@ function AgentActivityTaskRow({
  */
 export function AgentActivityHoverContent({
   tasks,
-}: AgentActivityHoverContentProps) {
+  onOpenTranscript,
+}: AgentActivityHoverContentProps & {
+  /** Forwarded to every row — clicking a row opens that run's conversation. */
+  onOpenTranscript?: (task: AgentTask) => void;
+}) {
   const { t } = useT("issues");
   const now = useActivityNow();
   const { agentById, runtimeById } = useActivityLookups();
@@ -160,6 +180,7 @@ export function AgentActivityHoverContent({
             now={now}
             agentById={agentById}
             runtimeById={runtimeById}
+            onOpen={onOpenTranscript}
           />
         ))}
       </div>

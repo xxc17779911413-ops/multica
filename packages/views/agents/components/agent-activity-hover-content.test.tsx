@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, screen } from "@testing-library/react";
+import { cleanup, fireEvent, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Agent, AgentRuntime, AgentTask, Issue } from "@multica/core/types";
 import { renderWithI18n } from "../../test/i18n";
@@ -141,6 +141,30 @@ describe("AgentActivityHoverContent", () => {
     renderWithI18n(<AgentActivityHoverContent tasks={[makeTask({})]} />);
 
     expect(screen.getByText("1 active run")).toBeInTheDocument();
+  });
+
+  it("makes each row a conversation trigger when a handler is provided", () => {
+    const onOpen = vi.fn();
+    renderWithI18n(
+      <AgentActivityHoverContent
+        tasks={[makeTask({ id: "t1" })]}
+        onOpenTranscript={onOpen}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button"));
+
+    expect(onOpen).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "t1" }),
+    );
+  });
+
+  it("keeps rows passive without a handler", () => {
+    renderWithI18n(
+      <AgentActivityHoverContent tasks={[makeTask({ id: "t1" })]} />,
+    );
+
+    expect(screen.queryByRole("button")).toBeNull();
   });
 
   it("uses an online agent projection when its runtime row is hidden", () => {
