@@ -840,6 +840,7 @@
       "false_label": "No",
       "value_placeholder": "Enter value…",
       "url_placeholder": "https://…",
+      "link_title_placeholder": "Link title (optional)",
       "number_placeholder": "0",
       "actor_search_placeholder": "Search members…",
       "open_link": "Open link",

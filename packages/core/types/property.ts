@@ -171,12 +171,55 @@ export interface IssueProperty {
   position: number;
   archived: boolean;
   archived_at?: string | null;
+  /** Create-enforced: every new human-created issue must carry a value. */
+  required?: boolean;
   usage_count?: number;
   created_at: string;
   updated_at: string;
 }
 
-export type IssuePropertyValue = string | number | boolean | string[];
+/**
+ * Titled link form of the url property type. A link without a title stays a
+ * bare string (the legacy shape), so both are valid everywhere a url value is
+ * read; new writes only use the object when a title exists.
+ */
+export interface IssuePropertyLinkValue {
+  title?: string;
+  url: string;
+}
+
+export type IssuePropertyValue =
+  | string
+  | number
+  | boolean
+  | string[]
+  | IssuePropertyLinkValue;
+
+export function isIssuePropertyLinkValue(
+  value: unknown,
+): value is IssuePropertyLinkValue {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    typeof (value as { url?: unknown }).url === "string"
+  );
+}
+
+/** The href of a url property value, whichever shape it is stored in. */
+export function urlPropertyHref(value: IssuePropertyValue | undefined): string | null {
+  if (typeof value === "string") return value;
+  if (isIssuePropertyLinkValue(value)) return value.url;
+  return null;
+}
+
+/** The display text of a url property value: its title, else the href. */
+export function urlPropertyLabel(value: IssuePropertyValue | undefined): string {
+  if (isIssuePropertyLinkValue(value)) {
+    const title = value.title?.trim();
+    return title ? title : value.url;
+  }
+  return typeof value === "string" ? value : "";
+}
 export type IssuePropertyValues = Record<string, IssuePropertyValue>;
 
 /**
@@ -275,6 +318,8 @@ export interface CreatePropertyRequest {
   description?: string;
   icon?: string;
   config?: IssuePropertyConfig;
+  /** Create-enforced required flag (defaults false). */
+  required?: boolean;
 }
 
 export interface UpdatePropertyRequest {
@@ -284,6 +329,8 @@ export interface UpdatePropertyRequest {
   icon?: string;
   config?: IssuePropertyConfig;
   archived?: boolean;
+  /** Create-enforced required flag (defaults false). */
+  required?: boolean;
 }
 
 export interface ListPropertiesResponse {

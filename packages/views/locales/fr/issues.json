@@ -817,6 +817,7 @@
       "false_label": "Non",
       "value_placeholder": "Saisir une valeur…",
       "url_placeholder": "https://…",
+      "link_title_placeholder": "Titre du lien (facultatif)",
       "number_placeholder": "0",
       "actor_search_placeholder": "Rechercher des membres…",
       "open_link": "Ouvrir le lien",

@@ -1325,6 +1325,25 @@ func operatorPatternPredicate(pattern propertyOperatorPattern, addArg func(any) 
 // scalar ranges fundamentally cannot use a containment index, and only
 // `contains` gets an indexable prefilter in front of it (see
 // operatorPatternPredicate).
+// singleKeyStringMember reports whether the raw exact-match member is a
+// single-key object {"<definitionId>": "<string>"} — the legacy filter shape —
+// and returns its key and string value. Anything else keeps the plain
+// containment path.
+func singleKeyStringMember(raw json.RawMessage) (def, value string, ok bool) {
+	var obj map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &obj); err != nil || len(obj) != 1 {
+		return "", "", false
+	}
+	for key, val := range obj {
+		var str string
+		if err := json.Unmarshal(val, &str); err != nil {
+			return "", "", false
+		}
+		return key, str, true
+	}
+	return "", "", false
+}
+
 func propertiesFilterPredicate(groups [][]json.RawMessage, addArg func(any) string) string {
 	groupSQL := make([]string, 0, len(groups))
 	for _, alternatives := range groups {
@@ -1336,6 +1355,16 @@ func propertiesFilterPredicate(groups [][]json.RawMessage, addArg func(any) stri
 			}
 			if pattern, ok := parseOperatorPattern(alt); ok {
 				ors = append(ors, operatorPatternPredicate(pattern, addArg))
+				continue
+			}
+			// Legacy scalar values match by containment. A titled link
+			// ({"title", "url"}) stores an object, so exact match also
+			// compares the object's url field: filtering by the href keeps
+			// working after a value gains a title.
+			if def, needle, ok := singleKeyStringMember(alt); ok {
+				ors = append(ors, fmt.Sprintf(
+					"(i.properties @> %s::jsonb OR (jsonb_typeof(i.properties->'%s') = 'object' AND i.properties->'%s'->>'url' = %s))",
+					addArg(string(alt)), def, def, addArg(needle)))
 				continue
 			}
 			ors = append(ors, fmt.Sprintf("i.properties @> %s::jsonb", addArg(string(alt))))

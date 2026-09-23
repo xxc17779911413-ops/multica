@@ -805,6 +805,7 @@
       "false_label": "いいえ",
       "value_placeholder": "値を入力…",
       "url_placeholder": "https://…",
+      "link_title_placeholder": "リンクタイトル（任意）",
       "number_placeholder": "0",
       "actor_search_placeholder": "メンバーを検索…",
       "open_link": "リンクを開く",

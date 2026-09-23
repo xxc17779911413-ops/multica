@@ -803,6 +803,7 @@
       "false_label": "否",
       "value_placeholder": "输入值…",
       "url_placeholder": "https://…",
+      "link_title_placeholder": "链接标题（可选）",
       "number_placeholder": "0",
       "actor_search_placeholder": "搜索成员…",
       "open_link": "打开链接",
