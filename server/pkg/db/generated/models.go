@@ -857,6 +857,7 @@ type IssueProperty struct {
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 	Icon        string             `json:"icon"`
+	Required    bool               `json:"required"`
 }
 
 type IssuePullRequest struct {

@@ -3098,6 +3098,10 @@ func (h *Handler) QuickCreateIssue(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+
+	if !h.checkRequiredIssueProperties(w, r, wsUUID, nil) {
+		return
+	}
 	requesterUUID, ok := parseUUIDOrBadRequest(w, requesterID, "requester_id")
 	if !ok {
 		return
@@ -3468,6 +3472,51 @@ func rejectDuplicateJSONValue(decoder *json.Decoder) error {
 	}
 }
 
+// checkRequiredIssueProperties enforces the workspace's required
+// create-time property definitions. Machine actors (task tokens) are exempt:
+// automation created issues before the requirement existed and would
+// otherwise start failing wholesale.
+func (h *Handler) checkRequiredIssueProperties(w http.ResponseWriter, r *http.Request, wsUUID pgtype.UUID, provided map[pgtype.UUID]json.RawMessage) bool {
+	if r.Header.Get("X-Actor-Source") == "task_token" {
+		return true
+	}
+	rows, err := h.DB.Query(r.Context(), `
+		SELECT id, name FROM issue_property
+		WHERE workspace_id = $1::uuid AND archived_at IS NULL AND required = true
+		ORDER BY position ASC, LOWER(name) ASC`, wsUUID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to load required properties")
+		return false
+	}
+	defer rows.Close()
+	missing := make([]string, 0, 4)
+	for rows.Next() {
+		var id pgtype.UUID
+		var name string
+		if err := rows.Scan(&id, &name); err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to load required properties")
+			return false
+		}
+		raw, ok := provided[id]
+		if !ok || strings.TrimSpace(string(raw)) == "" || strings.TrimSpace(string(raw)) == "null" {
+			missing = append(missing, name)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to load required properties")
+		return false
+	}
+	if len(missing) == 0 {
+		return true
+	}
+	writeJSON(w, http.StatusBadRequest, map[string]any{
+		"code":               "missing_required_issue_property",
+		"error":              "required properties are missing: " + strings.Join(missing, ", "),
+		"missing_properties": missing,
+	})
+	return false
+}
+
 func parseIssueCreateProperties(w http.ResponseWriter, values map[string]json.RawMessage) (map[pgtype.UUID]json.RawMessage, bool) {
 	if len(values) == 0 {
 		return nil, true
@@ -3636,6 +3685,9 @@ func (h *Handler) CreateIssue(w http.ResponseWriter, r *http.Request) {
 	}
 	properties, ok := parseIssueCreateProperties(w, req.Properties)
 	if !ok {
+		return
+	}
+	if !h.checkRequiredIssueProperties(w, r, wsUUID, properties) {
 		return
 	}
 

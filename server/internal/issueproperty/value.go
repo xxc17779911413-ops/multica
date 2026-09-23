@@ -22,6 +22,8 @@ import (
 const (
 	maxTextValueLen = 2000
 	maxURLValueLen  = 2048
+	// maxURLTitleLen bounds the optional display title of a link value.
+	maxURLTitleLen = 200
 	// MaxActorValues is exported so the handler's existing focused tests can
 	// continue to pin the public multi-actor limit after validation moved here.
 	MaxActorValues = 20
@@ -189,19 +191,16 @@ func ValidateValue(def db.IssueProperty, raw json.RawMessage) ([]byte, error) {
 		}
 		return json.Marshal(util.SanitizeTextForPostgres(text))
 	case "url":
-		text, ok := value.(string)
-		if !ok {
-			return nil, errors.New("value must be a URL string")
+		href, title, err := parseURLValue(value)
+		if err != nil {
+			return nil, err
 		}
-		text = strings.TrimSpace(text)
-		if len(text) > maxURLValueLen {
-			return nil, fmt.Errorf("value must be %d characters or fewer", maxURLValueLen)
+		if title == "" {
+			// A bare link keeps the legacy scalar shape: one stored form for
+			// both, so older readers and filters keep working.
+			return json.Marshal(href)
 		}
-		parsed, err := url.Parse(text)
-		if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
-			return nil, errors.New("value must be an http(s) URL")
-		}
-		return json.Marshal(text)
+		return json.Marshal(map[string]string{"title": title, "url": href})
 	case "number":
 		if _, ok := value.(float64); !ok {
 			return nil, errors.New("value must be a number")
@@ -281,4 +280,33 @@ func ValidateValue(def db.IssueProperty, raw json.RawMessage) ([]byte, error) {
 	default:
 		return nil, fmt.Errorf("unsupported property type %q", def.Type)
 	}
+}
+
+// parseURLValue accepts the legacy bare string and the link form
+// {"title": "...", "url": "..."} introduced with titled links. An empty
+// title collapses to the bare string, so both shapes stay valid on read.
+func parseURLValue(value any) (href, title string, err error) {
+	switch v := value.(type) {
+	case string:
+		href = strings.TrimSpace(v)
+	case map[string]any:
+		rawURL, _ := v["url"].(string)
+		href = strings.TrimSpace(rawURL)
+		rawTitle, _ := v["title"].(string)
+		title = strings.TrimSpace(rawTitle)
+		if utf8.RuneCountInString(title) > maxURLTitleLen {
+			return "", "", fmt.Errorf("link title must be %d characters or fewer", maxURLTitleLen)
+		}
+		title = util.SanitizeTextForPostgres(title)
+	default:
+		return "", "", errors.New("value must be a URL string or a {title, url} object")
+	}
+	if len(href) > maxURLValueLen {
+		return "", "", fmt.Errorf("value must be %d characters or fewer", maxURLValueLen)
+	}
+	parsed, perr := url.Parse(href)
+	if perr != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
+		return "", "", errors.New("value must be an http(s) URL")
+	}
+	return href, title, nil
 }

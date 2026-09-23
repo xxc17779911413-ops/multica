@@ -109,9 +109,12 @@ type PropertyResponse struct {
 	Position    float64        `json:"position"`
 	Archived    bool           `json:"archived"`
 	ArchivedAt  *string        `json:"archived_at"`
-	UsageCount  int64          `json:"usage_count"`
-	CreatedAt   string         `json:"created_at"`
-	UpdatedAt   string         `json:"updated_at"`
+	// Required marks the definition create-enforced: every new human-created
+	// issue must carry a value for it.
+	Required   bool   `json:"required"`
+	UsageCount int64  `json:"usage_count"`
+	CreatedAt  string `json:"created_at"`
+	UpdatedAt  string `json:"updated_at"`
 }
 
 func parsePropertyConfig(raw []byte) PropertyConfig {
@@ -136,6 +139,7 @@ func propertyToResponse(p db.IssueProperty, usageCount int64) PropertyResponse {
 		Config:      parsePropertyConfig(p.Config),
 		Position:    p.Position,
 		Archived:    p.ArchivedAt.Valid,
+		Required:    p.Required,
 		UsageCount:  usageCount,
 		CreatedAt:   timestampToString(p.CreatedAt),
 		UpdatedAt:   timestampToString(p.UpdatedAt),
@@ -157,6 +161,7 @@ func propertyListRowToResponse(row db.ListIssuePropertiesRow) PropertyResponse {
 		Icon:        row.Icon,
 		Config:      row.Config,
 		Position:    row.Position,
+		Required:    row.Required,
 		ArchivedAt:  row.ArchivedAt,
 		CreatedAt:   row.CreatedAt,
 		UpdatedAt:   row.UpdatedAt,
@@ -169,11 +174,13 @@ type CreatePropertyRequest struct {
 	Description string          `json:"description"`
 	Icon        string          `json:"icon"`
 	Config      *PropertyConfig `json:"config"`
+	Required    bool            `json:"required"`
 }
 
 type UpdatePropertyRequest struct {
 	Name        *string         `json:"name"`
 	Description *string         `json:"description"`
+	Required    *bool           `json:"required"`
 	Icon        *string         `json:"icon"`
 	Config      *PropertyConfig `json:"config"`
 	Archived    *bool           `json:"archived"`
@@ -627,6 +634,7 @@ func (h *Handler) CreateProperty(w http.ResponseWriter, r *http.Request) {
 			Description: sanitizeNullBytes(strings.TrimSpace(req.Description)),
 			Icon:        icon,
 			Config:      configJSON,
+			Required:    req.Required,
 		})
 		return err
 	})
@@ -690,6 +698,9 @@ func (h *Handler) UpdateProperty(w http.ResponseWriter, r *http.Request) {
 		}
 
 		params := db.UpdateIssuePropertyParams{ID: idUUID, WorkspaceID: wsUUID}
+		if req.Required != nil {
+			params.Required = pgtype.Bool{Bool: *req.Required, Valid: true}
+		}
 		if req.Name != nil {
 			name, err := validatePropertyName(*req.Name)
 			if err != nil {
