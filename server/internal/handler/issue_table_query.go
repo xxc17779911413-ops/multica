@@ -98,6 +98,7 @@ type issueTableFiltersRequest struct {
 	Date             *issueTableDateFilterRequest `json:"date,omitempty"`
 	WorkingOnly      bool                         `json:"working_only,omitempty"`
 	WorkingIssueIDs  []string                     `json:"working_issue_ids,omitempty"`
+	IDs              []string                     `json:"ids,omitempty"`
 	IncludeSubIssues *bool                        `json:"include_sub_issues,omitempty"`
 }
 
@@ -255,6 +256,8 @@ func canonicalIssueTableFingerprint(workspaceID string, spec issueTableQuerySpec
 		spec.Filters.Assignees != nil && len(spec.Filters.Assignees) == 0
 	explicitEmptyWorkingIssues :=
 		spec.Filters.WorkingIssueIDs != nil && len(spec.Filters.WorkingIssueIDs) == 0
+	explicitEmptyIDs :=
+		spec.Filters.IDs != nil && len(spec.Filters.IDs) == 0
 	normalized := spec
 	normalized.Search = strings.TrimSpace(normalized.Search)
 	normalized.Scope.AssigneeTypes = sortedUniqueStrings(normalized.Scope.AssigneeTypes)
@@ -265,6 +268,7 @@ func canonicalIssueTableFingerprint(workspaceID string, spec issueTableQuerySpec
 	normalized.Filters.LabelIDs = sortedUniqueStrings(normalized.Filters.LabelIDs)
 	normalized.Filters.Assignees = sortedUniqueActors(normalized.Filters.Assignees)
 	normalized.Filters.WorkingIssueIDs = sortedUniqueStrings(normalized.Filters.WorkingIssueIDs)
+	normalized.Filters.IDs = sortedUniqueStrings(normalized.Filters.IDs)
 	normalized.Filters.Creators = sortedUniqueActors(normalized.Filters.Creators)
 	for key, values := range normalized.Filters.Properties {
 		normalized.Filters.Properties[key] = sortedUniqueRawJSON(values)
@@ -274,11 +278,13 @@ func canonicalIssueTableFingerprint(workspaceID string, spec issueTableQuerySpec
 		Query                      issueTableQuerySpec `json:"query"`
 		ExplicitEmptyAssignees     bool                `json:"explicit_empty_assignees,omitempty"`
 		ExplicitEmptyWorkingIssues bool                `json:"explicit_empty_working_issues,omitempty"`
+		ExplicitEmptyIDs           bool                `json:"explicit_empty_ids,omitempty"`
 	}{
 		WorkspaceID:                workspaceID,
 		Query:                      normalized,
 		ExplicitEmptyAssignees:     explicitEmptyAssignees,
 		ExplicitEmptyWorkingIssues: explicitEmptyWorkingIssues,
+		ExplicitEmptyIDs:           explicitEmptyIDs,
 	})
 	if err != nil {
 		return "", err
@@ -649,7 +655,7 @@ func (h *Handler) compileIssueTableQuery(w http.ResponseWriter, r *http.Request,
 	if spec.Filters.Date != nil {
 		column := ""
 		switch spec.Filters.Date.Field {
-		case "created_at", "updated_at":
+		case "created_at", "updated_at", "last_activity_at":
 			column = spec.Filters.Date.Field
 		default:
 			writeError(w, http.StatusBadRequest, "invalid filters.date.field")
@@ -678,6 +684,23 @@ func (h *Handler) compileIssueTableQuery(w http.ResponseWriter, r *http.Request,
 			where = append(where, fmt.Sprintf(
 				"i.id = ANY(%s::uuid[])",
 				addArg(workingIssueIDs),
+			))
+		}
+	}
+	// Explicit id window (quick view "recently viewed"): an explicit empty
+	// list must mean "no rows", not "no filter", or clearing view history
+	// would widen the board back to the whole workspace.
+	if spec.Filters.IDs != nil {
+		recentIDs, ok := parseIssueTableUUIDList(w, spec.Filters.IDs, "filters.ids")
+		if !ok {
+			return issueTableSQL{}, false
+		}
+		if len(recentIDs) == 0 {
+			where = append(where, "FALSE")
+		} else {
+			where = append(where, fmt.Sprintf(
+				"i.id = ANY(%s::uuid[])",
+				addArg(recentIDs),
 			))
 		}
 	}

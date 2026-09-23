@@ -1603,3 +1603,61 @@ func TestIssueTableHierarchyRootKeysetPagination(t *testing.T) {
 		}
 	}
 }
+
+// The 快捷视图 "recently viewed" preset ships the server-side view history as
+// an explicit id window. An explicit empty list must mean "no rows" (and a
+// distinct cursor fingerprint), and a populated list must compile to a real
+// id predicate — otherwise the preset either widens to the whole workspace or
+// 400s with `unknown field "ids"`.
+func TestIssueTableIDsWindowIsExplicit(t *testing.T) {
+	if testHandler == nil {
+		t.Skip("database not available")
+	}
+
+	base := issueTableQuerySpec{
+		Scope: issueTableScope{Kind: "workspace"},
+		Sort:  issueTableSortRequest{Field: "position", Direction: "asc"},
+	}
+	withEmpty := base
+	withEmpty.Filters.IDs = []string{}
+
+	unfilteredFingerprint, err := canonicalIssueTableFingerprint(testWorkspaceID, base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	emptyFingerprint, err := canonicalIssueTableFingerprint(testWorkspaceID, withEmpty)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if unfilteredFingerprint == emptyFingerprint {
+		t.Fatal("explicit empty ids must not share the unfiltered cursor fingerprint")
+	}
+
+	w := httptest.NewRecorder()
+	compiled, ok := testHandler.compileIssueTableQuery(
+		w,
+		newRequest(http.MethodPost, "/api/issues/table/rows", nil),
+		withEmpty,
+	)
+	if !ok {
+		t.Fatalf("compile empty ids: %d %s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(compiled.where, "FALSE") {
+		t.Fatalf("explicit empty ids predicate = %q, want FALSE", compiled.where)
+	}
+
+	withIssue := base
+	withIssue.Filters.IDs = []string{"00000000-0000-4000-8000-000000000001"}
+	w = httptest.NewRecorder()
+	compiled, ok = testHandler.compileIssueTableQuery(
+		w,
+		newRequest(http.MethodPost, "/api/issues/table/rows", nil),
+		withIssue,
+	)
+	if !ok {
+		t.Fatalf("compile ids window: %d %s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(compiled.where, "i.id = ANY(") {
+		t.Fatalf("ids window predicate = %q, want id = ANY(...)", compiled.where)
+	}
+}
