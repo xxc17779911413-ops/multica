@@ -78,6 +78,7 @@ function makeProject(id: string, title: string, icon: string | null): Project {
   return {
     id,
     workspace_id: "ws-1",
+    created_by: null,
     title,
     description: null,
     icon,

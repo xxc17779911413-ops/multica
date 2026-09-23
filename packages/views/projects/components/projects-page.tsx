@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo, useState, type MouseEvent } from "react";
 import {
+
   ArrowDown,
   ArrowUp,
   ChevronDown,
@@ -15,6 +16,7 @@ import {
   Plus,
   Rows3,
   Search,
+  ShieldCheck,
   Trash2,
   X,
 } from "lucide-react";
@@ -39,7 +41,6 @@ import { useWorkspaceId } from "@multica/core/hooks";
 import { useWorkspacePaths } from "@multica/core/paths";
 import { useAuthStore } from "@multica/core/auth";
 import { useActorName } from "@multica/core/workspace/hooks";
-import { memberListOptions } from "@multica/core/workspace/queries";
 import { useModalStore } from "@multica/core/modals";
 import { AppLink, useIntentNavigate, useRowLink } from "../../navigation";
 import { ActorAvatar } from "../../common/actor-avatar";
@@ -92,7 +93,6 @@ import {
   TooltipTrigger,
 } from "@multica/ui/components/ui/tooltip";
 import type {
-  MemberWithUser,
   Project,
   ProjectPriority,
   ProjectStatus,
@@ -151,6 +151,8 @@ const COLUMN_WIDTHS: Record<ProjectColumnKey, number> = {
   lead: 132,
   issues: 80,
   created: 104,
+  role: 140,
+  creator: 140,
 };
 
 // Fixed tracks: edges 12+12, checkbox 16, name min 200, status 116,
@@ -239,6 +241,7 @@ function ProjectRowActions({
   const deletePin = useDeletePin();
   const deleteProject = useDeleteProject();
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [permissionsOpen, setPermissionsOpen] = useState(false);
 
   const togglePin = () => {
     if (pinned) deletePin.mutate({ itemType: "project", itemId: project.id });
@@ -418,6 +421,7 @@ function ProjectTableRow({
   onToggleSelect,
   rowHref,
   rowLink,
+  getActorName,
 }: {
   project: Project;
   pinned: boolean;
@@ -427,7 +431,10 @@ function ProjectTableRow({
   onToggleSelect: () => void;
   rowHref: string;
   rowLink: ReturnType<typeof useRowLink>;
+  getActorName: (actorType: string, actorId: string) => string | undefined;
 }) {
+
+  const { t } = useT("projects");
   const formatRelativeDate = useFormatRelativeDate();
   const updateProject = useUpdateProject();
   const handleUpdate = useCallback(
@@ -554,7 +561,6 @@ function ProjectTableRow({
             project={project}
             pinned={pinned}
             canDelete={canDelete}
-            showAuthorize={false}
           />
         </span>
       </ListGridCell>
@@ -668,11 +674,11 @@ function ProjectCard({
   project,
   pinned,
   canDelete,
-}: {
+  getActorName,}: {
   project: Project;
   pinned: boolean;
   canDelete: boolean;
-}) {
+  getActorName: (actorType: string, actorId: string) => string | undefined;}) {
   const { t } = useT("projects");
   const wsPaths = useWorkspacePaths();
   const formatRelativeDate = useFormatRelativeDate();
@@ -748,6 +754,16 @@ function ProjectCard({
           )}
         />
         <div className="flex items-center gap-2">
+          <span className="flex max-w-[100px] items-center gap-1 text-micro text-muted-foreground" title={t(($) => $.table.creator)}>
+            {project.created_by ? (
+              <>
+                <ActorAvatar actorType="member" actorId={project.created_by} size="sm" enableHoverCard />
+                <span className="truncate">{getActorName("member", project.created_by) ?? "—"}</span>
+              </>
+            ) : (
+              "—"
+            )}
+          </span>
           <ProjectPriorityBadge project={project} handleUpdate={handleUpdate} align="start" />
           <span className="text-micro text-muted-foreground">
             {formatRelativeDate(project.created_at)}
@@ -771,7 +787,7 @@ const STATUS_VALUES: ProjectStatus[] = [
   "cancelled",
 ];
 const PRIORITY_VALUES: ProjectPriority[] = ["urgent", "high", "medium", "low", "none"];
-const COLUMN_KEYS: ProjectColumnKey[] = ["priority", "progress", "lead", "issues", "created"];
+const COLUMN_KEYS: ProjectColumnKey[] = ["priority", "progress", "lead", "issues", "created", "role" ];
 const SORT_FIELDS: ProjectSortField[] = ["name", "priority", "status", "progress", "created"];
 
 function countActiveFilters(f: ProjectListFilters): number {
@@ -906,18 +922,12 @@ export function ProjectsPage() {
   const isColVisible = (key: ProjectColumnKey) => !hiddenColumns.includes(key);
 
   const { data: projects = [], isLoading } = useQuery(projectListOptions(wsId));
-  const { data: members = [] } = useQuery(memberListOptions(wsId));
   const { data: pins = [] } = useQuery({
     ...pinListOptions(wsId, currentUser?.id ?? ""),
     enabled: !!wsId && !!currentUser?.id,
   });
   const openCreateProject = () => useModalStore.getState().open("create-project");
 
-  const isWorkspaceAdmin = useMemo(() => {
-    if (!currentUser) return false;
-    const me = members.find((m: MemberWithUser) => m.user_id === currentUser.id);
-    return me?.role === "owner" || me?.role === "admin";
-  }, [members, currentUser]);
 
   const pinnedProjectIds = useMemo(() => {
     const s = new Set<string>();

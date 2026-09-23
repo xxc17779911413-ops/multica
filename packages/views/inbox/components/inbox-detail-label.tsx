@@ -37,6 +37,8 @@ export function useTypeLabels(): Record<InboxItemType, string> {
     task_access_request: t(($) => $.types.task_access_request),
     task_access_granted: t(($) => $.types.task_access_granted),
     quick_create_unconfirmed: t(($) => $.types.quick_create_unconfirmed),
+    autopilot_paused: t(($) => $.types.autopilot_paused),
+    autopilot_quota_exceeded: t(($) => $.types.autopilot_quota_exceeded),
   };
 }
 

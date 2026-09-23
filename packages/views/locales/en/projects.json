@@ -27,7 +27,8 @@
     "lead": "Lead",
     "created": "Created",
     "issues": "Issues",
-    "my_role": "My role"
+    "my_role": "My role",
+    "creator": "Creator"
   },
   "status": {
     "planned": "Planned",
@@ -360,6 +361,7 @@
     "task_source_delegated_originator": "Original requester",
     "task_source_access_request": "Approved access request",
     "task_source_workspace_owner_bypass": "Workspace owner bypass",
-    "select_project_role_key": "Project role key"
+    "select_project_role_key": "Project role key",
+    "task_policy_project_task_restricted": "This task does not inherit project access — visible only to granted people and departments · Policy version {{version}}"
   }
 }

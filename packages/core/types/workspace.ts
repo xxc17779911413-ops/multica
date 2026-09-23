@@ -93,6 +93,8 @@ export interface MemberWithUser {
   name: string;
   email: string;
   avatar_url: string | null;
+  // 组织目录导入后由服务端填充的登录状态标记
+  has_logged_in?: boolean;
 }
 
 export interface Invitation {

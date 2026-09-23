@@ -26,7 +26,8 @@
     "lead": "リード",
     "created": "作成日",
     "issues": "タスク数",
-    "my_role": "自分のロール"
+    "my_role": "自分のロール",
+    "creator": "作成者"
   },
   "status": {
     "planned": "計画中",
@@ -358,6 +359,7 @@
     "task_source_delegated_originator": "元の依頼者",
     "task_source_access_request": "承認済みアクセス申請",
     "task_source_workspace_owner_bypass": "ワークスペース所有者バイパス",
-    "select_project_role_key": "プロジェクトロールキー"
+    "select_project_role_key": "プロジェクトロールキー",
+    "task_policy_project_task_restricted": "このタスクはプロジェクト権限を継承しません。付与されたメンバー/部門のみ閲覧できます · ポリシーバージョン {{version}}"
   }
 }

@@ -26,7 +26,8 @@
     "lead": "负责人",
     "created": "创建时间",
     "issues": "任务数",
-    "my_role": "我的角色"
+    "my_role": "我的角色",
+    "creator": "创建人"
   },
   "status": {
     "planned": "计划中",
@@ -358,6 +359,7 @@
     "task_source_delegated_originator": "原始请求人",
     "task_source_access_request": "已通过的权限申请",
     "task_source_workspace_owner_bypass": "工作区所有者绕过",
-    "select_project_role_key": "项目角色标识"
+    "select_project_role_key": "项目角色标识",
+    "task_policy_project_task_restricted": "当前任务不继承项目权限，仅已授权的成员/部门可见 · 策略版本 {{version}}"
   }
 }
