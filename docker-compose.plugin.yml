@@ -2,8 +2,11 @@
 # 密钥类配置放 .env（已被 gitignore），本文件可安全提交。
 services:
   backend:
+    image: multica-server-tf:authz
     environment:
       FF_PLUGINS_V1: "true"
+      # 项目/任务权限 overlay（lc-797 移植）：restricted = 读取+写入均强制
+      PROJECT_PERMISSION_ROLLOUT_PHASE: "restricted"
       MULTICA_PLUGIN_SECRET_KEY: ${MULTICA_PLUGIN_SECRET_KEY:?please set MULTICA_PLUGIN_SECRET_KEY in .env}
       MULTICA_PLUGIN_SURFACE_ORIGIN: ${MULTICA_PLUGIN_SURFACE_ORIGIN:-http://10.182.132.95:8082}
       MULTICA_PLUGIN_API_URL: ${MULTICA_PLUGIN_API_URL:-http://10.182.132.95:8080/v1}
