@@ -1,4 +1,5 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cloneElement } from "react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import en from "../../locales/en/issues.json";
 import type { AgentTask } from "@multica/core/types";
@@ -31,6 +32,11 @@ vi.mock("../../agents/components/agent-activity-hover-content", () => ({
   AgentActivityHoverContent: () => <div data-testid="activity-hover" />,
 }));
 
+vi.mock("../../common/task-transcript", () => ({
+  TranscriptButton: ({ open, task }: { open?: boolean; task: { id: string } }) =>
+    open ? <div data-testid="transcript-open">{task.id}</div> : null,
+}));
+
 vi.mock("../../i18n", () => ({
   useT: () => ({
     t: (
@@ -51,12 +57,17 @@ vi.mock("@multica/ui/components/ui/hover-card", () => ({
   HoverCard: ({ children }: { children: React.ReactNode }) => (
     <div data-testid="hover-card">{children}</div>
   ),
+  // The real trigger merges its props onto the `render` element. The mock has
+  // to clone that element (keeping role/handlers) or a test can neither see
+  // nor click a trigger that the component builds through `render`.
   HoverCardTrigger: ({
     children,
+    render,
     delay,
     closeDelay,
   }: {
     children: React.ReactNode;
+    render?: React.ReactElement;
     delay?: number;
     closeDelay?: number;
   }) => (
@@ -65,7 +76,7 @@ vi.mock("@multica/ui/components/ui/hover-card", () => ({
       data-delay={String(delay)}
       data-close-delay={String(closeDelay)}
     >
-      {children}
+      {render ? cloneElement(render, undefined, children) : children}
     </span>
   ),
   HoverCardContent: ({ children }: { children: React.ReactNode }) => (
@@ -151,6 +162,26 @@ describe("IssueAgentActivityIndicator", () => {
     // The cue itself survives — only the popup behind it is dropped.
     expect(screen.getByTestId("agent-avatar-stack")).not.toBeNull();
     expect(screen.getByText("Working", { ignore: '[aria-hidden="true"] *' })).not.toBeNull();
+  });
+
+  it("opens the run conversation when the badge is clicked", () => {
+    render(<IssueAgentActivityIndicator issueId="issue-1" />);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /Open conversation/ }),
+    );
+
+    expect(screen.getByTestId("transcript-open")).toHaveTextContent("task-1");
+  });
+
+  it("opens the run conversation from the card-less badge in inbox rows", () => {
+    render(<IssueAgentActivityIndicator issueId="issue-1" hoverCard={false} />);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /Open conversation/ }),
+    );
+
+    expect(screen.getByTestId("transcript-open")).toHaveTextContent("task-1");
   });
 
   it("renders nothing when no agent is on the issue", () => {

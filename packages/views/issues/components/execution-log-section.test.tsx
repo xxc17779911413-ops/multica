@@ -18,8 +18,21 @@ vi.mock("../../common/actor-avatar", () => ({
 }));
 
 vi.mock("../../common/task-transcript", () => ({
-  TranscriptButton: ({ title }: { title?: string }) => (
-    <button type="button">{title ?? "Transcript"}</button>
+  TranscriptButton: ({
+    title,
+    open,
+    onOpenChange,
+  }: {
+    title?: string;
+    open?: boolean;
+    onOpenChange?: (open: boolean, fromKeyboard?: boolean) => void;
+  }) => (
+    <span>
+      <button type="button" onClick={() => onOpenChange?.(true, false)}>
+        {title ?? "Transcript"}
+      </button>
+      {open ? <span data-testid="transcript-open" /> : null}
+    </span>
   ),
 }));
 
@@ -87,6 +100,22 @@ describe("ActiveTaskRow", () => {
     expect(screen.getByText("Includes 3 comments")).toBeInTheDocument();
     expect(screen.getByText("View transcript")).toBeInTheDocument();
     expect(mockState.taskMessagesOptions).not.toHaveBeenCalled();
+  });
+
+  it("opens the run conversation from the agent avatar", () => {
+    renderWithI18n(<ActiveTaskRow task={makeTask()} issueId="issue-1" />);
+
+    fireEvent.click(screen.getByTestId("actor-avatar").closest("button")!);
+
+    expect(screen.getByTestId("transcript-open")).toBeInTheDocument();
+  });
+
+  it("keeps the avatar passive for a queued task with nothing to show", () => {
+    renderWithI18n(
+      <ActiveTaskRow task={makeTask({ status: "queued" })} issueId="issue-1" />,
+    );
+
+    expect(screen.getByTestId("actor-avatar").closest("button")).toBeNull();
   });
 });
 

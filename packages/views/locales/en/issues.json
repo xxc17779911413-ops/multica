@@ -677,7 +677,9 @@
     "chip_agents_working_other": "{{count}} agents working",
     "issues_count_one": "{{count}} issue",
     "issues_count_other": "{{count}} issues",
-    "chip_agents_working_unknown": "Agents working: —"
+    "chip_agents_working_unknown": "Agents working: —",
+    "open_conversation": "Open conversation",
+    "open_conversation_hint": "Click a row to open its conversation"
   },
   "filtered_empty": {
     "title": "No issues match these filters",

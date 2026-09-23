@@ -338,6 +338,19 @@ export function ActiveTaskRow({
   const showTranscript =
     task.status !== "queued" && task.status !== "waiting_local_directory";
 
+  // The row can be rendered standalone (issue panel) or supervised by a
+  // parent that owns the dialog (header chip passes onTranscriptOpenChange).
+  // Standalone: this row owns its open state and the avatar is a second
+  // trigger on the same dialog. Supervised: never pass `open` down — the
+  // parent's callback replaces the local setter, so the row must not render
+  // a second dialog.
+  const supervised = !!onTranscriptOpenChange;
+  const [selfTranscriptOpen, setSelfTranscriptOpen] = useState(false);
+  const handleTranscriptOpenChange = (open: boolean, fromKeyboard?: boolean) => {
+    if (!supervised) setSelfTranscriptOpen(open);
+    onTranscriptOpenChange?.(open, fromKeyboard);
+  };
+
   const handleCancel = async () => {
     if (cancelling) return;
     setCancelling(true);
@@ -362,7 +375,17 @@ export function ActiveTaskRow({
   // test that asserts a scenario production cannot produce. Restore it in the
   // same change that adds incremental reporting + cache invalidation.
   return (
-    <RowShell task={task}>
+    <RowShell
+      task={task}
+      avatarAction={
+        showTranscript
+          ? {
+              label: t(($) => $.execution_log.transcript_tooltip),
+              onClick: () => handleTranscriptOpenChange(true, false),
+            }
+          : undefined
+      }
+    >
       <TriggerText text={trigger} />
       <TaskCommentCoverage task={task} />
       <RowStatus title={label}>
@@ -382,7 +405,8 @@ export function ActiveTaskRow({
             agentName=""
             isLive={task.status === "running"}
             title={t(($) => $.execution_log.transcript_tooltip)}
-            onOpenChange={onTranscriptOpenChange}
+            {...(supervised ? {} : { open: selfTranscriptOpen })}
+            onOpenChange={handleTranscriptOpenChange}
           />
         )}
         <Tooltip>
@@ -424,6 +448,7 @@ export function ActiveTaskRow({
 
 function PastRow({ task, issueId }: { task: AgentTask; issueId: string }) {
   const { t } = useT("issues");
+  const [selfTranscriptOpen, setSelfTranscriptOpen] = useState(false);
   const { t: tAgents } = useT("agents");
   const timeAgo = useTimeAgo();
   const [retrying, setRetrying] = useState(false);
@@ -504,7 +529,14 @@ function PastRow({ task, issueId }: { task: AgentTask; issueId: string }) {
   };
 
   return (
-    <RowShell task={task} title={rowTitle}>
+    <RowShell
+      task={task}
+      title={rowTitle}
+      avatarAction={{
+        label: t(($) => $.execution_log.transcript_tooltip),
+        onClick: () => setSelfTranscriptOpen(true),
+      }}
+    >
       <TriggerText text={trigger} />
       <TaskCommentCoverage task={task} />
       <RowStatus title={statusTitle}>
@@ -519,7 +551,13 @@ function PastRow({ task, issueId }: { task: AgentTask; issueId: string }) {
         )}
       </RowStatus>
       <RowActions>
-        <TranscriptButton task={task} agentName="" title={t(($) => $.execution_log.transcript_tooltip)} />
+        <TranscriptButton
+          task={task}
+          agentName=""
+          title={t(($) => $.execution_log.transcript_tooltip)}
+          open={selfTranscriptOpen}
+          onOpenChange={(open) => setSelfTranscriptOpen(open)}
+        />
         {canRetry && (
           <Tooltip>
             <TooltipTrigger
@@ -552,6 +590,7 @@ function PastRow({ task, issueId }: { task: AgentTask; issueId: string }) {
 function RowShell({
   task,
   title,
+  avatarAction,
   children,
 }: {
   task: AgentTask;
@@ -560,6 +599,10 @@ function RowShell({
    *  is swapped out for the action buttons on hover — a title there would
    *  disappear at exactly the moment the pointer arrives. */
   title?: string;
+  /** When provided, the agent avatar becomes the row's conversation entry:
+   *  clicking the agent opens its transcript. Rows without a transcript to
+   *  show keep the avatar passive. */
+  avatarAction?: { label: string; onClick: () => void };
   children: React.ReactNode;
 }) {
   return (
@@ -568,12 +611,29 @@ function RowShell({
       className="group/execution-log-row flex items-center gap-2 overflow-hidden rounded-xs px-1 py-1.5 transition-colors hover:bg-accent/40"
     >
       {task.agent_id ? (
-        <ActorAvatar
-          actorType="agent"
-          actorId={task.agent_id}
-          size="sm"
-          enableHoverCard
-        />
+        avatarAction ? (
+          <button
+            type="button"
+            onClick={avatarAction.onClick}
+            aria-label={avatarAction.label}
+            title={avatarAction.label}
+            className="shrink-0 cursor-pointer rounded-full transition-opacity hover:opacity-80 focus-visible:outline-2 focus-visible:outline-ring"
+          >
+            <ActorAvatar
+              actorType="agent"
+              actorId={task.agent_id}
+              size="sm"
+              enableHoverCard
+            />
+          </button>
+        ) : (
+          <ActorAvatar
+            actorType="agent"
+            actorId={task.agent_id}
+            size="sm"
+            enableHoverCard
+          />
+        )
       ) : (
         <span className="inline-block h-5 w-5 shrink-0 rounded-full bg-muted" />
       )}
