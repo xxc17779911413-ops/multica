@@ -74,6 +74,17 @@ import { useT } from "../../i18n";
 import { useProjectStatusLabels, useProjectPriorityLabels } from "./labels";
 import { matchesPinyin } from "../../editor/extensions/pinyin-match";
 
+const CREATED_RANGE_OPTIONS = [
+  { key: "all", label: "全部" },
+  { key: "today", label: "今天" },
+  { key: "yesterday", label: "昨天" },
+  { key: "this_week", label: "本周" },
+  { key: "last_week", label: "上周" },
+  { key: "this_month", label: "本月" },
+] as const;
+type CreatedRangeKey = (typeof CREATED_RANGE_OPTIONS)[number]["key"];
+
+
 // ---------------------------------------------------------------------------
 // Property row — sidebar property display
 // ---------------------------------------------------------------------------
@@ -150,6 +161,39 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
   const [propertiesOpen, setPropertiesOpen] = useState(true);
   const [progressOpen, setProgressOpen] = useState(true);
   const [descriptionOpen, setDescriptionOpen] = useState(true);
+  const [createdRange, setCreatedRange] = useState<CreatedRangeKey>("all");
+  const createdRangeFilter = useMemo(() => {
+    if (createdRange === "all") return undefined;
+    const now = new Date();
+    const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    const today = startOfDay(now);
+    const dayMs = 24 * 60 * 60 * 1000;
+    const mondayOffset = () => (today.getDay() + 6) % 7;
+    let start = today;
+    let end = new Date(now.getTime() + 60_000);
+    switch (createdRange) {
+      case "today":
+        break;
+      case "yesterday":
+        start = new Date(today.getTime() - dayMs);
+        end = today;
+        break;
+      case "this_week":
+        start = new Date(today.getTime() - mondayOffset() * dayMs);
+        break;
+      case "last_week":
+        end = new Date(today.getTime() - mondayOffset() * dayMs);
+        start = new Date(end.getTime() - 7 * dayMs);
+        break;
+      case "this_month":
+        start = new Date(now.getFullYear(), now.getMonth(), 1);
+        break;
+    }
+    return (issue: { created_at?: string }) => {
+      const t = Date.parse(issue.created_at ?? "");
+      return Number.isFinite(t) && t >= start.getTime() && t < end.getTime();
+    };
+  }, [createdRange]);
 
   // Sidebar panel
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({
@@ -548,8 +592,23 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
             }
           />
 
+          <div className="flex flex-wrap items-center gap-1 pb-2">
+            <span className="mr-1 text-caption text-muted-foreground">创建时间</span>
+            {CREATED_RANGE_OPTIONS.map((option) => (
+              <Button
+                key={option.key}
+                variant={createdRange === option.key ? "default" : "outline"}
+                size="sm"
+                className="h-7 px-2 text-xs"
+                onClick={() => setCreatedRange(option.key)}
+              >
+                {option.label}
+              </Button>
+            ))}
+          </div>
           <IssueSurface
             scope={issueScope}
+            clientFilter={createdRangeFilter}
             modes={["board", "list", "table", "swimlane", "gantt"]}
           />
           </div>
