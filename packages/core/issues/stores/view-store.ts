@@ -42,7 +42,58 @@ export type SortField =
 export type SortDirection = "asc" | "desc";
 /** Quick-view presets pinned above the issue surface. */
 export type QuickViewKey = "recent_created" | "recent_viewed" | "recent_active";
-export type IssueDateField = "created_at" | "updated_at";
+/** Time window applied by the 最近创建 / 最近有新进展 presets. */
+export type QuickViewRange =
+  | "today"
+  | "yesterday"
+  | "last3d"
+  | "this_week"
+  | "last7d"
+  | "this_month";
+export type IssueDateField = "created_at" | "updated_at" | "last_activity_at";
+
+/** Local-day [start, end) window for a quick-view range preset. */
+export function quickViewRangeBounds(
+  range: QuickViewRange,
+  now: Date = new Date(),
+): { start: Date; end: Date } {
+  const startOfDay = new Date(now);
+  startOfDay.setHours(0, 0, 0, 0);
+  const endOfToday = new Date(startOfDay);
+  endOfToday.setDate(endOfToday.getDate() + 1);
+  switch (range) {
+    case "yesterday": {
+      const start = new Date(startOfDay);
+      start.setDate(start.getDate() - 1);
+      return { start, end: startOfDay };
+    }
+    case "last3d": {
+      const start = new Date(startOfDay);
+      start.setDate(start.getDate() - 2);
+      return { start, end: endOfToday };
+    }
+    case "this_week": {
+      const start = new Date(startOfDay);
+      const mondayOffset = (start.getDay() + 6) % 7;
+      start.setDate(start.getDate() - mondayOffset);
+      return { start, end: endOfToday };
+    }
+    case "last7d": {
+      const start = new Date(startOfDay);
+      start.setDate(start.getDate() - 6);
+      return { start, end: endOfToday };
+    }
+    case "this_month": {
+      return {
+        start: new Date(now.getFullYear(), now.getMonth(), 1),
+        end: endOfToday,
+      };
+    }
+    case "today":
+    default:
+      return { start: startOfDay, end: endOfToday };
+  }
+}
 
 export type TableSystemColumnKey =
   | "title"
@@ -281,6 +332,7 @@ export interface IssueViewState {
   /** Last explicit direction per field, so switching fields is reversible. */
   sortDirections: Partial<Record<SortField, SortDirection>>;
   quickView: QuickViewKey | null;
+  quickViewRange: QuickViewRange;
   recentViewedIds: string[];
   cardProperties: CardProperties;
   /** Custom property definition ids whose values render on board/list cards. */
@@ -351,6 +403,7 @@ export interface IssueViewState {
   setSortBy: (field: SortField) => void;
   setSortDirection: (dir: SortDirection) => void;
   setQuickView: (key: QuickViewKey | null) => void;
+  setQuickViewRange: (range: QuickViewRange) => void;
   setRecentViewedIds: (ids: string[]) => void;
   toggleCardProperty: (key: keyof CardProperties) => void;
   toggleCardPropertyId: (propertyId: string) => void;
@@ -386,10 +439,12 @@ export const viewStoreSlice = (set: StoreApi<IssueViewState>["setState"]): Issue
   propertyFilters: {},
   dateFilter: null,
   agentRunningFilter: false,
-  sortBy: "created_at",
+  sortBy: "last_activity",
   sortDirection: "desc",
-  sortDirections: { created_at: "desc" },
-  quickView: null,
+  sortDirections: { created_at: "desc", last_activity: "desc" },
+  // 默认视图：今天有新进展（打开任务页即有意义的视图，而不是裸列表）。
+  quickView: "recent_active",
+  quickViewRange: "today",
   recentViewedIds: [],
   cardProperties: { ...DEFAULT_CARD_PROPERTIES },
   cardPropertyIds: [],
@@ -566,6 +621,10 @@ export const viewStoreSlice = (set: StoreApi<IssueViewState>["setState"]): Issue
     set(() => ({
       quickView: key,
     })),
+  setQuickViewRange: (range) =>
+    set(() => ({
+      quickViewRange: range,
+    })),
   setRecentViewedIds: (ids) =>
     set(() => ({
       recentViewedIds: ids,
@@ -701,6 +760,7 @@ export const viewStorePersistOptions = (name: string) => ({
     sortDirection: state.sortDirection,
     sortDirections: state.sortDirections,
     quickView: state.quickView,
+    quickViewRange: state.quickViewRange,
     cardProperties: state.cardProperties,
     cardPropertyIds: state.cardPropertyIds,
     showSubIssues: state.showSubIssues,

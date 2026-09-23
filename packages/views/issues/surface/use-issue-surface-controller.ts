@@ -28,7 +28,11 @@ import {
   assigneeTypesForActorKind,
   type IssueScope,
 } from "@multica/core/issues/surface/scope";
-import type { IssueDateFilter, SortField } from "@multica/core/issues/stores/view-store";
+import {
+  quickViewRangeBounds,
+  type IssueDateFilter,
+  type SortField,
+} from "@multica/core/issues/stores/view-store";
 import { propertyListOptions } from "@multica/core/properties";
 import { propertyIdFromViewKey } from "@multica/core/issues/stores/view-store";
 import { useViewStore } from "@multica/core/issues/stores/view-store-context";
@@ -219,6 +223,7 @@ export function useIssueSurfaceController({
   const recentViewedIds = useViewStore((s) => s.recentViewedIds);
   const sortDirection = useViewStore((s) => s.sortDirection);
   const dateFilter = useViewStore((s) => s.dateFilter);
+  const quickViewRange = useViewStore((s) => s.quickViewRange);
   const statusFilters = useViewStore((s) => s.statusFilters);
   const priorityFilters = useViewStore((s) => s.priorityFilters);
   const assigneeFilters = useViewStore((s) => s.assigneeFilters);
@@ -258,10 +263,36 @@ export function useIssueSurfaceController({
     [createDefaults, queryPlan.createDefaults],
   );
 
-  const dateParams = useMemo(
-    () => issueDateFilterToApiParams(dateFilter),
-    [dateFilter],
-  );
+  // Time-windowed quick views (最近创建 / 最近有新进展) own a date filter with
+  // an explicit range so the UI can show what "最近" means. The preset window
+  // outranks the filter-bar date chip: activating the preset must not silently
+  // AND with a range the user set days ago.
+  const quickViewDate = useMemo(() => {
+    const field =
+      quickView === "recent_created"
+        ? ("created_at" as const)
+        : quickView === "recent_active"
+          ? ("last_activity_at" as const)
+          : null;
+    if (!field) return null;
+    const bounds = quickViewRangeBounds(quickViewRange);
+    return {
+      field,
+      start: bounds.start.toISOString(),
+      end: bounds.end.toISOString(),
+    };
+  }, [quickView, quickViewRange]);
+
+  const dateParams = useMemo(() => {
+    if (quickViewDate) {
+      return {
+        date_field: quickViewDate.field,
+        date_start: quickViewDate.start,
+        date_end: quickViewDate.end,
+      };
+    }
+    return issueDateFilterToApiParams(dateFilter);
+  }, [dateFilter, quickViewDate]);
   // Active property catalog. Persisted view state can outlive definitions
   // (archive/delete): filters keyed by a non-active definition are stripped
   // before they reach the predicates, and a sort on a non-active definition

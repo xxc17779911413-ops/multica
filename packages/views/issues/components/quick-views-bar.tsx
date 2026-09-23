@@ -1,16 +1,32 @@
 "use client";
 
 import { useEffect } from "react";
-import { Activity, Clock, History } from "lucide-react";
+import {
+  Activity,
+  CalendarRange,
+  Check,
+  ChevronDown,
+  Clock,
+  History,
+} from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@multica/core/api";
 import { useWorkspaceId } from "@multica/core/hooks";
-import type { QuickViewKey } from "@multica/core/issues/stores/view-store";
+import type {
+  QuickViewKey,
+  QuickViewRange,
+} from "@multica/core/issues/stores/view-store";
 import {
   useViewStore,
   useViewStoreApi,
 } from "@multica/core/issues/stores/view-store-context";
 import { Button } from "@multica/ui/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@multica/ui/components/ui/dropdown-menu";
 import { cn } from "@multica/ui/lib/utils";
 import { useT } from "../../i18n";
 
@@ -24,6 +40,27 @@ const QUICK_VIEWS: {
   { key: "recent_active", labelKey: "quick_recent_active", icon: Activity },
 ];
 
+const QUICK_VIEW_RANGES: {
+  key: QuickViewRange;
+  labelKey:
+    | "quick_range_today"
+    | "quick_range_yesterday"
+    | "quick_range_last3d"
+    | "quick_range_this_week"
+    | "quick_range_last7d"
+    | "quick_range_this_month";
+}[] = [
+  { key: "today", labelKey: "quick_range_today" },
+  { key: "yesterday", labelKey: "quick_range_yesterday" },
+  { key: "last3d", labelKey: "quick_range_last3d" },
+  { key: "this_week", labelKey: "quick_range_this_week" },
+  { key: "last7d", labelKey: "quick_range_last7d" },
+  { key: "this_month", labelKey: "quick_range_this_month" },
+];
+
+/** Presets that own a visible time window; only they show the range picker. */
+const RANGE_VIEWS: QuickViewKey[] = ["recent_created", "recent_active"];
+
 /**
  * One-click board presets pinned above the issue surface. Activating a preset
  * only seeds the view (layout, grouping, sort, and — for "recently viewed" —
@@ -34,6 +71,8 @@ export function QuickViewsBar() {
   const { t } = useT("issues");
   const workspaceId = useWorkspaceId();
   const quickView = useViewStore((s) => s.quickView);
+  const quickViewRange = useViewStore((s) => s.quickViewRange);
+  const setQuickViewRange = useViewStore((s) => s.setQuickViewRange);
   const viewApi = useViewStoreApi();
 
   const recents = useQuery({
@@ -77,6 +116,11 @@ export function QuickViewsBar() {
     }
   };
 
+  const showRangePicker = quickView != null && RANGE_VIEWS.includes(quickView);
+  const rangeLabelKey =
+    QUICK_VIEW_RANGES.find((range) => range.key === quickViewRange)?.labelKey ??
+    "quick_range_today";
+
   return (
     <div className="flex flex-wrap items-center gap-1.5 border-b px-4 py-1.5">
       <span className="mr-1 text-caption text-muted-foreground">
@@ -97,6 +141,37 @@ export function QuickViewsBar() {
           {t(($) => $.display[labelKey])}
         </Button>
       ))}
+      {showRangePicker && (
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <Button
+                variant="ghost"
+                size="sm"
+                aria-label={t(($) => $.display.quick_view_range)}
+                className="h-6 gap-1 px-2 text-caption text-muted-foreground"
+              >
+                <CalendarRange className="size-3.5" />
+                {t(($) => $.display[rangeLabelKey])}
+                <ChevronDown className="size-3" />
+              </Button>
+            }
+          />
+          <DropdownMenuContent>
+            {QUICK_VIEW_RANGES.map(({ key, labelKey }) => (
+              <DropdownMenuItem key={key} onClick={() => setQuickViewRange(key)}>
+                <Check
+                  className={cn(
+                    "size-3.5",
+                    quickViewRange !== key && "opacity-0",
+                  )}
+                />
+                {t(($) => $.display[labelKey])}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
     </div>
   );
 }

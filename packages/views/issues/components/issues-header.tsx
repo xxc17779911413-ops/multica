@@ -193,9 +193,13 @@ function normalizeDateRange(from: Date, to: Date) {
   return from <= to ? [from, to] as const : [to, from] as const;
 }
 
-const DATE_FIELD_LABEL_KEY: Record<IssueDateField, "date_field_created" | "date_field_updated"> = {
+const DATE_FIELD_LABEL_KEY: Record<
+  IssueDateField,
+  "date_field_created" | "date_field_updated" | "date_field_last_activity"
+> = {
   created_at: "date_field_created",
   updated_at: "date_field_updated",
+  last_activity_at: "date_field_last_activity",
 };
 
 /** Feeding this to useIssueCounts hides every per-option badge (badges only
