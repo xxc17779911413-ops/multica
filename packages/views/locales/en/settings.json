@@ -612,7 +612,20 @@
     "toast_avatar_updated": "Avatar updated",
     "toast_avatar_failed": "Failed to upload avatar",
     "toast_profile_updated": "Profile updated",
-    "toast_profile_failed": "Failed to update profile"
+    "toast_profile_failed": "Failed to update profile",
+    "section_password": "Password",
+    "password_hint": "At least 8 characters.",
+    "password_current_label": "Current password",
+    "password_new_label": "New password",
+    "password_confirm_label": "Confirm new password",
+    "password_submit": "Update password",
+    "password_submitting": "Updating...",
+    "password_too_short": "Password must be at least 8 characters.",
+    "password_mismatch": "The two passwords do not match.",
+    "password_current_incorrect": "Current password is incorrect",
+    "password_unchanged": "New password must differ from the current one",
+    "password_change_failed": "Failed to update password",
+    "toast_password_updated": "Password updated"
   },
   "notifications": {
     "title": "Inbox Notifications",

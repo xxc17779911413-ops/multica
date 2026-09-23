@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Button } from "@multica/ui/components/ui/button";
 import { Input } from "@multica/ui/components/ui/input";
 import { Textarea } from "@multica/ui/components/ui/textarea";
 import { toast } from "sonner";
@@ -90,6 +91,50 @@ export function AccountTab() {
     enabled: !!user && !!profileName.trim() && !descriptionTooLong,
     isEqual: profilesEqual,
   });
+
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [changingPassword, setChangingPassword] = useState(false);
+
+  const newPasswordTooShort = newPassword.length > 0 && newPassword.length < 8;
+  const passwordsMismatch =
+    confirmPassword.length > 0 && confirmPassword !== newPassword;
+  const canChangePassword =
+    !!user &&
+    currentPassword.length > 0 &&
+    newPassword.length > 0 &&
+    confirmPassword.length > 0 &&
+    !newPasswordTooShort &&
+    !passwordsMismatch &&
+    !changingPassword;
+
+  const submitPasswordChange = async () => {
+    if (!canChangePassword) return;
+    setChangingPassword(true);
+    try {
+      await api.changePassword(currentPassword, newPassword);
+      toast.success(t(($) => $.account.toast_password_updated));
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch (error) {
+      const code = (error as { body?: { code?: unknown } }).body?.code;
+      if (code === "invalid_password") {
+        toast.error(t(($) => $.account.password_current_incorrect));
+      } else if (code === "password_unchanged") {
+        toast.error(t(($) => $.account.password_unchanged));
+      } else {
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : t(($) => $.account.password_change_failed),
+        );
+      }
+    } finally {
+      setChangingPassword(false);
+    }
+  };
 
   return (
     <SettingsTab title={t(($) => $.page.tabs.profile)}>
@@ -188,6 +233,67 @@ export function AccountTab() {
               ) : null}
             </div>
           </SettingsRow>
+        </SettingsCard>
+      </SettingsSection>
+
+      <SettingsSection
+        title={t(($) => $.account.section_password)}
+        description={t(($) => $.account.password_hint)}
+      >
+        <SettingsCard>
+          <SettingsRow label={t(($) => $.account.password_current_label)} size="text">
+            <Input
+              type="password"
+              name="current-password"
+              autoComplete="current-password"
+              aria-label={t(($) => $.account.password_current_label)}
+              value={currentPassword}
+              onChange={(event) => setCurrentPassword(event.target.value)}
+            />
+          </SettingsRow>
+          <SettingsRow label={t(($) => $.account.password_new_label)} size="text">
+            <div>
+              <Input
+                type="password"
+                name="new-password"
+                autoComplete="new-password"
+                aria-label={t(($) => $.account.password_new_label)}
+                value={newPassword}
+                onChange={(event) => setNewPassword(event.target.value)}
+                aria-invalid={newPasswordTooShort}
+              />
+              {newPasswordTooShort ? (
+                <p className="mt-1 text-caption text-destructive">
+                  {t(($) => $.account.password_too_short)}
+                </p>
+              ) : null}
+            </div>
+          </SettingsRow>
+          <SettingsRow label={t(($) => $.account.password_confirm_label)} size="text">
+            <div>
+              <Input
+                type="password"
+                name="confirm-password"
+                autoComplete="new-password"
+                aria-label={t(($) => $.account.password_confirm_label)}
+                value={confirmPassword}
+                onChange={(event) => setConfirmPassword(event.target.value)}
+                aria-invalid={passwordsMismatch}
+              />
+              {passwordsMismatch ? (
+                <p className="mt-1 text-caption text-destructive">
+                  {t(($) => $.account.password_mismatch)}
+                </p>
+              ) : null}
+            </div>
+          </SettingsRow>
+          <div className="flex items-center justify-end px-4 py-3.5">
+            <Button onClick={submitPasswordChange} disabled={!canChangePassword}>
+              {changingPassword
+                ? t(($) => $.account.password_submitting)
+                : t(($) => $.account.password_submit)}
+            </Button>
+          </div>
         </SettingsCard>
       </SettingsSection>
     </SettingsTab>

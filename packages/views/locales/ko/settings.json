@@ -610,7 +610,20 @@
     "toast_avatar_updated": "아바타를 업데이트했습니다",
     "toast_avatar_failed": "아바타를 업로드하지 못했습니다",
     "toast_profile_updated": "프로필을 업데이트했습니다",
-    "toast_profile_failed": "프로필을 업데이트하지 못했습니다"
+    "toast_profile_failed": "프로필을 업데이트하지 못했습니다",
+    "section_password": "비밀번호",
+    "password_hint": "8자 이상이어야 합니다.",
+    "password_current_label": "현재 비밀번호",
+    "password_new_label": "새 비밀번호",
+    "password_confirm_label": "새 비밀번호 확인",
+    "password_submit": "비밀번호 업데이트",
+    "password_submitting": "업데이트 중...",
+    "password_too_short": "비밀번호는 8자 이상이어야 합니다.",
+    "password_mismatch": "두 비밀번호가 일치하지 않습니다.",
+    "password_current_incorrect": "현재 비밀번호가 올바르지 않습니다",
+    "password_unchanged": "새 비밀번호는 현재 비밀번호와 달라야 합니다",
+    "password_change_failed": "비밀번호 업데이트에 실패했습니다",
+    "toast_password_updated": "비밀번호가 업데이트되었습니다"
   },
   "notifications": {
     "title": "인박스 알림",

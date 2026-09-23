@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/multica-ai/multica/server/internal/auth"
 	"github.com/multica-ai/multica/server/internal/testutil"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 	"golang.org/x/crypto/bcrypt"
@@ -27,7 +28,7 @@ func TestValidatePassword(t *testing.T) {
 		{"eight CJK runes pass (multi-byte)", "密码密码密码密码", false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			err := validatePassword(tc.password)
+			err := auth.ValidatePassword(tc.password)
 			if tc.wantErr && err == nil {
 				t.Fatalf("validatePassword(%q) = nil, want error", tc.password)
 			}
@@ -170,6 +171,94 @@ func TestLegacyAccountMustSetPassword(t *testing.T) {
 
 	req = testutil.JSONRequest(http.MethodPost, "/auth/login", map[string]any{
 		"email": email, "password": "bridged!pass9",
+	})
+	testutil.Call(t, testHandler.Login, req).Want(http.StatusOK)
+}
+
+// Change-password requires the current password (a borrowed session must not
+// be able to lock the owner out), rejects policy violations, and rotates the
+// credential every login path then uses.
+func TestChangePassword(t *testing.T) {
+	if testHandler == nil || testPool == nil {
+		t.Skip("database fixture unavailable")
+	}
+	ctx := context.Background()
+	email := fmt.Sprintf("pw-change-%d@multica.ai", time.Now().UnixNano())
+	seedHash, err := auth.HashPassword("original!pass9")
+	if err != nil {
+		t.Fatalf("hash seed password: %v", err)
+	}
+	var userID string
+	if err := testPool.QueryRow(ctx,
+		`INSERT INTO "user" (email, name, password_hash) VALUES ($1, $2, $3) RETURNING id`,
+		email, "Change User", seedHash).Scan(&userID); err != nil {
+		t.Fatalf("seed user: %v", err)
+	}
+	t.Cleanup(func() {
+		_, _ = testPool.Exec(ctx, `DELETE FROM "user" WHERE email = $1`, email)
+	})
+
+	// 1. Wrong current password → 401 invalid_password.
+	req := testutil.JSONRequest(http.MethodPost, "/api/auth/change-password", map[string]any{
+		"current_password": "wrong!pass9", "new_password": "rotated!pass9",
+	})
+	req.Header.Set("X-User-ID", userID)
+	resp := testutil.Call(t, testHandler.ChangePassword, req).Want(http.StatusUnauthorized)
+	if code, _ := resp.Map()["code"].(string); code != "invalid_password" {
+		t.Fatalf("wrong current code = %q, want invalid_password (body %s)", code, resp.Text())
+	}
+
+	// 2. Policy violation → 400.
+	req = testutil.JSONRequest(http.MethodPost, "/api/auth/change-password", map[string]any{
+		"current_password": "original!pass9", "new_password": "short7!",
+	})
+	req.Header.Set("X-User-ID", userID)
+	testutil.Call(t, testHandler.ChangePassword, req).Want(http.StatusBadRequest)
+
+	// 3. New must differ from current → 400 password_unchanged.
+	req = testutil.JSONRequest(http.MethodPost, "/api/auth/change-password", map[string]any{
+		"current_password": "original!pass9", "new_password": "original!pass9",
+	})
+	req.Header.Set("X-User-ID", userID)
+	resp = testutil.Call(t, testHandler.ChangePassword, req).Want(http.StatusBadRequest)
+	if code, _ := resp.Map()["code"].(string); code != "password_unchanged" {
+		t.Fatalf("same-password code = %q, want password_unchanged (body %s)", code, resp.Text())
+	}
+
+	// 4. Happy path → the old password is dead, the new one signs in.
+	req = testutil.JSONRequest(http.MethodPost, "/api/auth/change-password", map[string]any{
+		"current_password": "original!pass9", "new_password": "rotated!pass9",
+	})
+	req.Header.Set("X-User-ID", userID)
+	testutil.Call(t, testHandler.ChangePassword, req).Want(http.StatusOK)
+	req = testutil.JSONRequest(http.MethodPost, "/auth/login", map[string]any{
+		"email": email, "password": "original!pass9",
+	})
+	testutil.Call(t, testHandler.Login, req).Want(http.StatusUnauthorized)
+	req = testutil.JSONRequest(http.MethodPost, "/auth/login", map[string]any{
+		"email": email, "password": "rotated!pass9",
+	})
+	testutil.Call(t, testHandler.Login, req).Want(http.StatusOK)
+
+	// 5. Pre-password account (empty hash) may set one without proving the
+	// (nonexistent) current password.
+	email2 := fmt.Sprintf("pw-nohash-%d@multica.ai", time.Now().UnixNano())
+	var userID2 string
+	if err := testPool.QueryRow(ctx,
+		`INSERT INTO "user" (email, name) VALUES ($1, $2) RETURNING id`,
+		email2, "No Hash User").Scan(&userID2); err != nil {
+		t.Fatalf("seed hashless user: %v", err)
+	}
+	t.Cleanup(func() {
+		_, _ = testPool.Exec(ctx, `DELETE FROM "user" WHERE email = $1`, email2)
+	})
+	req = testutil.JSONRequest(http.MethodPost, "/api/auth/change-password", map[string]any{
+		"current_password": "whatever!9", "new_password": "brandnew!pass9",
+	})
+	req.Header.Set("X-User-ID", userID2)
+	testutil.Call(t, testHandler.ChangePassword, req).Want(http.StatusOK)
+	req = testutil.JSONRequest(http.MethodPost, "/auth/login", map[string]any{
+		"email": email2, "password": "brandnew!pass9",
 	})
 	testutil.Call(t, testHandler.Login, req).Want(http.StatusOK)
 }

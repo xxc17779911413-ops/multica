@@ -609,7 +609,20 @@
     "toast_avatar_updated": "Avatar mis à jour",
     "toast_avatar_failed": "Échec de l'envoi de l'avatar",
     "toast_profile_updated": "Profil mis à jour",
-    "toast_profile_failed": "Échec de la mise à jour du profil"
+    "toast_profile_failed": "Échec de la mise à jour du profil",
+    "section_password": "Mot de passe",
+    "password_hint": "Au moins 8 caractères.",
+    "password_current_label": "Mot de passe actuel",
+    "password_new_label": "Nouveau mot de passe",
+    "password_confirm_label": "Confirmer le nouveau mot de passe",
+    "password_submit": "Mettre à jour le mot de passe",
+    "password_submitting": "Mise à jour...",
+    "password_too_short": "Le mot de passe doit contenir au moins 8 caractères.",
+    "password_mismatch": "Les deux mots de passe ne correspondent pas.",
+    "password_current_incorrect": "Le mot de passe actuel est incorrect",
+    "password_unchanged": "Le nouveau mot de passe doit être différent de l'actuel",
+    "password_change_failed": "Échec de la mise à jour du mot de passe",
+    "toast_password_updated": "Mot de passe mis à jour"
   },
   "notifications": {
     "title": "Notifications de la boîte de réception",
