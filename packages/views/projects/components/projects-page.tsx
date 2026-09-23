@@ -149,25 +149,27 @@ const COLUMN_WIDTHS: Record<ProjectColumnKey, number> = {
   priority: 116,
   progress: 88,
   lead: 132,
+  role: 108,
   issues: 80,
+  creator: 132,
   created: 104,
-  role: 140,
-  creator: 140,
 };
+const ACCESS_COLUMN_WIDTH = 96;
 
 // Fixed tracks: edges 12+12, checkbox 16, name min 200, status 116,
-// kebab 28 = 384, plus the 10 gap-x-3 gaps between the wide template's
-// 11 tracks.
-const FIXED_TRACKS_WIDTH = 384 + 10 * 12;
+// authorization 96, kebab 28 = 480, plus the gaps between the wide template's
+// tracks. Authorization stays fixed and visible so the primary permission
+// action cannot be lost in the column preferences.
+const FIXED_TRACKS_WIDTH = 384 + ACCESS_COLUMN_WIDTH + 13 * 12;
 
 // Render/track order: checkbox, name, status (core, fixed 116px), priority,
-// progress, lead, issues, created, kebab. MUST be a literal string —
+// progress, lead, role, issues, creator, access, created, kebab. MUST be a literal string —
 // Tailwind can't see interpolated `grid-cols-[...]` arbitrary values, so an
 // interpolated width silently drops the whole template and the grid
 // collapses to one column.
 const GRID_COLS =
-  "grid-cols-[0.75rem_1rem_minmax(120px,1fr)_116px_1.75rem_0.75rem] " +
-  "@2xl:grid-cols-[0.75rem_1rem_minmax(200px,1fr)_116px_var(--pjc-priority)_var(--pjc-progress)_var(--pjc-lead)_var(--pjc-issues)_var(--pjc-created)_1.75rem_0.75rem]";
+  "grid-cols-[0.75rem_1rem_minmax(120px,1fr)_116px_var(--pjc-access)_1.75rem_0.75rem] " +
+  "@2xl:grid-cols-[0.75rem_1rem_minmax(200px,1fr)_116px_var(--pjc-priority)_var(--pjc-progress)_var(--pjc-lead)_var(--pjc-role)_var(--pjc-issues)_var(--pjc-creator)_var(--pjc-access)_var(--pjc-created)_1.75rem_0.75rem]";
 
 const stopRowNavigation = (e: MouseEvent) => e.stopPropagation();
 
@@ -186,8 +188,11 @@ function columnTrackVars(
     "--pjc-priority": width("priority"),
     "--pjc-progress": width("progress"),
     "--pjc-lead": width("lead"),
+    "--pjc-role": width("role"),
     "--pjc-issues": width("issues"),
+    "--pjc-creator": width("creator"),
     "--pjc-created": width("created"),
+    "--pjc-access": `${ACCESS_COLUMN_WIDTH}px`,
     "--pjc-minw": `${minWidth}px`,
   } as React.CSSProperties;
 }
@@ -228,10 +233,12 @@ function ProjectRowActions({
   project,
   pinned,
   canDelete,
+  showAuthorize = true,
 }: {
   project: Project;
   pinned: boolean;
   canDelete: boolean;
+  showAuthorize?: boolean;
 }) {
   const { t } = useT("projects");
   const { t: tCommon } = useT("common");
@@ -284,6 +291,15 @@ function ProjectRowActions({
             )}
             {pinned ? t(($) => $.page.unpin) : t(($) => $.page.pin)}
           </DropdownMenuItem>
+          {showAuthorize && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => setPermissionsOpen(true)}>
+                <ShieldCheck className="size-3.5" />
+                {t(($) => $.permissions.authorize)}
+              </DropdownMenuItem>
+            </>
+          )}
           {canDelete && (
             <>
               <DropdownMenuSeparator />
@@ -561,6 +577,7 @@ function ProjectTableRow({
             project={project}
             pinned={pinned}
             canDelete={canDelete}
+            showAuthorize={false}
           />
         </span>
       </ListGridCell>
@@ -643,6 +660,13 @@ function ProjectTableHeader({
       ) : (
         <ListGridHeaderCell className="hidden px-0 @2xl:flex" />
       )}
+      {isColVisible("role") ? (
+        <ListGridHeaderCell className="hidden @2xl:flex">
+          {t(($) => $.table.my_role)}
+        </ListGridHeaderCell>
+      ) : (
+        <ListGridHeaderCell className="hidden px-0 @2xl:flex" />
+      )}
       {isColVisible("issues") ? (
         <ListGridHeaderCell className="hidden justify-end @2xl:flex" align="right">
           {t(($) => $.table.issues)}
@@ -650,6 +674,16 @@ function ProjectTableHeader({
       ) : (
         <ListGridHeaderCell className="hidden px-0 @2xl:flex" />
       )}
+      {isColVisible("creator") ? (
+        <ListGridHeaderCell className="hidden @2xl:flex">
+          {t(($) => $.table.creator)}
+        </ListGridHeaderCell>
+      ) : (
+        <ListGridHeaderCell className="hidden px-0 @2xl:flex" />
+      )}
+      <ListGridHeaderCell>
+        {t(($) => $.permissions.authorize)}
+      </ListGridHeaderCell>
       {isColVisible("created") ? (
         <ListGridHeaderCell
           className="hidden @2xl:flex"
