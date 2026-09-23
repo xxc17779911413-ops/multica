@@ -610,7 +610,20 @@
     "toast_avatar_updated": "アバターを更新しました",
     "toast_avatar_failed": "アバターをアップロードできませんでした",
     "toast_profile_updated": "プロフィールを更新しました",
-    "toast_profile_failed": "プロフィールを更新できませんでした"
+    "toast_profile_failed": "プロフィールを更新できませんでした",
+    "section_password": "パスワード",
+    "password_hint": "8文字以上で設定してください。",
+    "password_current_label": "現在のパスワード",
+    "password_new_label": "新しいパスワード",
+    "password_confirm_label": "新しいパスワード（確認）",
+    "password_submit": "パスワードを更新",
+    "password_submitting": "更新中...",
+    "password_too_short": "パスワードは8文字以上必要です。",
+    "password_mismatch": "パスワードが一致しません。",
+    "password_current_incorrect": "現在のパスワードが正しくありません",
+    "password_unchanged": "新しいパスワードは現在のものと異なる必要があります",
+    "password_change_failed": "パスワードの更新に失敗しました",
+    "toast_password_updated": "パスワードを更新しました"
   },
   "notifications": {
     "title": "インボックス通知",

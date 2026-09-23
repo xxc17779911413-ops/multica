@@ -1068,6 +1068,20 @@ export class ApiClient {
     });
   }
 
+  /** Rotate the caller's password; the current one must be presented. */
+  async changePassword(
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<{ ok: boolean }> {
+    return this.fetch("/api/auth/change-password", {
+      method: "POST",
+      body: JSON.stringify({
+        current_password: currentPassword,
+        new_password: newPassword,
+      }),
+    });
+  }
+
   async googleLogin(code: string, redirectUri: string): Promise<LoginResponse> {
     return this.fetch("/auth/google", {
       method: "POST",
