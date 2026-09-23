@@ -215,6 +215,8 @@ export function useIssueSurfaceController({
   const setViewMode = useViewStore((s) => s.setViewMode);
   const grouping = useViewStore((s) => s.grouping);
   const sortBy = useViewStore((s) => s.sortBy);
+  const quickView = useViewStore((s) => s.quickView);
+  const recentViewedIds = useViewStore((s) => s.recentViewedIds);
   const sortDirection = useViewStore((s) => s.sortDirection);
   const dateFilter = useViewStore((s) => s.dateFilter);
   const statusFilters = useViewStore((s) => s.statusFilters);
@@ -490,6 +492,7 @@ export function useIssueSurfaceController({
         ...(agentRunningFilter
           ? { working_issue_ids: [...workingIssueIDs] }
           : {}),
+        ...(quickView === "recent_viewed" ? { ids: recentViewedIds } : {}),
         include_sub_issues: showSubIssues,
       },
       ...(debouncedActiveSearch ? { search: debouncedActiveSearch } : {}),
@@ -517,6 +520,8 @@ export function useIssueSurfaceController({
     viewIncludeNoProject,
     viewProjectFilters,
     workingIssueIDs,
+    quickView,
+    recentViewedIds,
   ]);
   // Every consumer below — the facet request, the status/group branch hooks and
   // the Table's own `useQueries` list — keys off this object's identity. Pin it
@@ -833,6 +838,20 @@ export function useIssueSurfaceController({
 
   const { ganttWorkingScopeIssues: _ganttWorkingScope, ...surfaceData } = data;
 
+  // "Recently viewed" orders the surface by the view history rather than any
+  // server sort; board/list grouping preserves this order inside columns.
+  const recentOrderedSurfaceIssues = useMemo(() => {
+    if (quickView !== "recent_viewed" || recentViewedIds.length === 0) {
+      return surfaceData.surfaceIssues;
+    }
+    const order = new Map(recentViewedIds.map((id, index) => [id, index]));
+    return surfaceData.surfaceIssues.toSorted(
+      (a, b) =>
+        (order.get(a.id) ?? Number.MAX_SAFE_INTEGER) -
+        (order.get(b.id) ?? Number.MAX_SAFE_INTEGER),
+    );
+  }, [quickView, recentViewedIds, surfaceData.surfaceIssues]);
+
   return {
     scopeKey,
     projectId,
@@ -840,6 +859,7 @@ export function useIssueSurfaceController({
     viewMode: effectiveViewMode,
     allowGantt: allowedModes.has("gantt") && !!projectId,
     ...surfaceData,
+    surfaceIssues: recentOrderedSurfaceIssues,
     workingAgents,
     hasActiveFilters,
     statusPagination: usesServerStatusSurface

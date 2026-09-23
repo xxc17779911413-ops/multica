@@ -273,6 +273,15 @@ export interface ListGroupedIssuesParams {
 }
 
 /** Raw backend response shape for `GET /api/issues`. */
+export interface RecentIssueView {
+  issue_id: string;
+  viewed_at: string;
+}
+
+export interface RecentIssueViewsResponse {
+  views: RecentIssueView[];
+}
+
 export interface ListIssuesResponse {
   issues: Issue[];
   total: number;

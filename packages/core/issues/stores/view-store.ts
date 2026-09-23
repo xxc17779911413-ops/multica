@@ -36,9 +36,12 @@ export type SortField =
   | "due_date"
   | "created_at"
   | "updated_at"
+  | "last_activity"
   | "title"
   | `property:${string}`;
 export type SortDirection = "asc" | "desc";
+/** Quick-view presets pinned above the issue surface. */
+export type QuickViewKey = "recent_created" | "recent_viewed" | "recent_active";
 export type IssueDateField = "created_at" | "updated_at";
 
 export type TableSystemColumnKey =
@@ -161,6 +164,7 @@ export const SORT_OPTIONS: { value: StaticSortField; label: string }[] = [
   { value: "due_date", label: "Due date" },
   { value: "created_at", label: "Created date" },
   { value: "updated_at", label: "Updated date" },
+  { value: "last_activity", label: "Last activity" },
   { value: "title", label: "Title" },
 ];
 
@@ -197,7 +201,9 @@ export const DEFAULT_HIDDEN_STATUSES: readonly IssueStatus[] = [
 ];
 
 export function defaultSortDirection(field: SortField): SortDirection {
-  return field === "created_at" || field === "updated_at" ? "desc" : "asc";
+  return field === "created_at" || field === "updated_at" || field === "last_activity"
+    ? "desc"
+    : "asc";
 }
 
 /** Only expose card controls that the active renderer can honor. */
@@ -274,6 +280,8 @@ export interface IssueViewState {
   sortDirection: SortDirection;
   /** Last explicit direction per field, so switching fields is reversible. */
   sortDirections: Partial<Record<SortField, SortDirection>>;
+  quickView: QuickViewKey | null;
+  recentViewedIds: string[];
   cardProperties: CardProperties;
   /** Custom property definition ids whose values render on board/list cards. */
   cardPropertyIds: string[];
@@ -342,6 +350,8 @@ export interface IssueViewState {
   resetFiltersTo: (snapshot: FilterSnapshot) => void;
   setSortBy: (field: SortField) => void;
   setSortDirection: (dir: SortDirection) => void;
+  setQuickView: (key: QuickViewKey | null) => void;
+  setRecentViewedIds: (ids: string[]) => void;
   toggleCardProperty: (key: keyof CardProperties) => void;
   toggleCardPropertyId: (propertyId: string) => void;
   toggleShowSubIssues: () => void;
@@ -379,6 +389,8 @@ export const viewStoreSlice = (set: StoreApi<IssueViewState>["setState"]): Issue
   sortBy: "created_at",
   sortDirection: "desc",
   sortDirections: { created_at: "desc" },
+  quickView: null,
+  recentViewedIds: [],
   cardProperties: { ...DEFAULT_CARD_PROPERTIES },
   cardPropertyIds: [],
   showSubIssues: true,
@@ -550,6 +562,14 @@ export const viewStoreSlice = (set: StoreApi<IssueViewState>["setState"]): Issue
         }
       }
     }),
+  setQuickView: (key) =>
+    set(() => ({
+      quickView: key,
+    })),
+  setRecentViewedIds: (ids) =>
+    set(() => ({
+      recentViewedIds: ids,
+    })),
   setSortBy: (field) =>
     set((state) => {
       const next = normalizeSortForGrouping(
@@ -680,6 +700,7 @@ export const viewStorePersistOptions = (name: string) => ({
     sortBy: state.sortBy,
     sortDirection: state.sortDirection,
     sortDirections: state.sortDirections,
+    quickView: state.quickView,
     cardProperties: state.cardProperties,
     cardPropertyIds: state.cardPropertyIds,
     showSubIssues: state.showSubIssues,

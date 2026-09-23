@@ -1983,6 +1983,7 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 			// Issues
 			r.Route("/api/issues", func(r chi.Router) {
 				r.Get("/access-request-target/{id}", h.GetIssueAccessRequestTarget)
+				r.Get("/view-history", h.ListRecentIssueViews)
 				r.Get("/limit-usage", h.GetIssueLimitUsage)
 				r.Post("/table/groups", h.ListIssueTableGroups)
 				r.Post("/table/rows", h.ListIssueTableRows)
@@ -2002,6 +2003,7 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 				r.Post("/batch-delete", h.BatchDeleteIssues)
 				r.Route("/{id}", func(r chi.Router) {
 					r.Get("/", h.GetIssue)
+					r.Post("/view", h.RecordIssueView)
 					r.Get("/effective-access", h.GetIssueEffectiveAccess)
 					r.Post("/access-requests", h.CreateIssueAccessRequest)
 					r.Get("/access-requests", h.ListIssueAccessRequests)

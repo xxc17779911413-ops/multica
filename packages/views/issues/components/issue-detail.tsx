@@ -67,7 +67,7 @@ import { STATUS_CONFIG } from "@multica/core/issues/config";
 import { formatDateOnly, isPastDateOnly } from "@multica/core/issues/date";
 import { useUpdateIssue } from "@multica/core/issues/mutations";
 import { toast } from "sonner";
-import { errorCode } from "@multica/core/api";
+import { api, errorCode } from "@multica/core/api";
 import { StatusIcon, PriorityIcon, StatusPicker, PriorityPicker, StagePicker, StartDatePicker, DueDatePicker, AssigneePicker, LabelPicker } from ".";
 import { maxSiblingStage } from "./pickers/stage-picker";
 import { CustomPropertyValueEditor, CustomPropertyValueDisplay } from "./pickers/custom-property-picker";
@@ -1244,6 +1244,12 @@ export function IssueDetailSkeleton({ leading }: { leading?: ReactNode } = {}) {
 // ---------------------------------------------------------------------------
 
 export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = true, layoutId = "multica_issue_detail_layout", highlightCommentId, highlightRequestToken, accessRequestId, accessRequestToken, notFoundFallback, leadingAction }: IssueDetailProps) {
+  // Feed the "recently viewed" quick view. Best-effort: a failed record must
+  // never block opening the task.
+  useEffect(() => {
+    void api.recordIssueView(issueId).catch(() => {});
+  }, [issueId]);
+
   const { t } = useT("issues");
   const locale = useLocale();
   const timeAgo = useTimeAgo();

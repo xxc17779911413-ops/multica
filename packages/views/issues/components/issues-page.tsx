@@ -14,6 +14,7 @@ import { RefreshablePageIcon } from "../../layout/refreshable-page-icon";
 import { useT } from "../../i18n";
 import { IssueSurface } from "../surface/issue-surface";
 import { IssuesHeader } from "./issues-header";
+import { QuickViewsBar } from "./quick-views-bar";
 
 function IssuesSurfaceHeader({
   issues,
@@ -42,6 +43,7 @@ function IssuesSurfaceHeader({
         </RefreshablePageIcon>
         <h1 className="text-body font-medium">{t(($) => $.page.breadcrumb_title)}</h1>
       </PageHeader>
+      <QuickViewsBar />
       <IssuesHeader
         scopedIssues={issues}
         workingAgents={workingAgents}

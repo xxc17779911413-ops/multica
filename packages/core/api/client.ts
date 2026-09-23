@@ -251,8 +251,7 @@ import type {
   TaskPermissionRolesResponse,
   TaskRetryPolicy,
   TaskRetryPolicyRequest,
-  UpdateTaskRetryPolicyRequest,
-} from "../types";
+  UpdateTaskRetryPolicyRequest,, RecentIssueViewsResponse } from "../types";
 import type { OnboardingCompletionPath } from "../onboarding/types";
 import type {
   CreateFeedbackResponse,
@@ -1146,6 +1145,26 @@ export class ApiClient {
     return parseWithFallback(raw, UserSchema, EMPTY_USER, {
       endpoint: "PATCH /api/me",
     });
+  }
+
+  /** Record that the caller opened one issue (feeds the "recently viewed" view). */
+  async recordIssueView(issueId: string): Promise<{ recorded: boolean }> {
+    return this.fetch<{ recorded: boolean }>(
+      `/api/issues/${encodeURIComponent(issueId)}/view`,
+      { method: "POST" },
+    );
+  }
+
+  /** The caller's most recently viewed issues in one workspace, newest first. */
+  async listRecentIssueViews(params: {
+    workspace_id: string;
+    limit?: number;
+  }): Promise<RecentIssueViewsResponse> {
+    const search = new URLSearchParams({ workspace_id: params.workspace_id });
+    if (params.limit) search.set("limit", String(params.limit));
+    return this.fetch<RecentIssueViewsResponse>(
+      `/api/issues/view-history?${search.toString()}`,
+    );
   }
 
   // Issues
