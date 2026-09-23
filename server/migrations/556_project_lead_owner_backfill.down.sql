@@ -1,0 +1,4 @@
+-- 2026-08-27 coder(lq): Authorization backfills are intentionally not
+-- reversed on down migration, because doing so could remove an owner granted
+-- manually after this migration ran. The schema migration itself is reversible
+-- through the migration runner while preserving authorization data safely.
