@@ -3047,6 +3047,10 @@ type QuickCreateIssueRequest struct {
 	ProjectID     string   `json:"project_id,omitempty"`
 	ParentIssueID string   `json:"parent_issue_id,omitempty"`
 	AttachmentIDs []string `json:"attachment_ids,omitempty"`
+	// Properties mirrors the create endpoint's bag: an ID-keyed map whose
+	// values use the typed wire shape. The daemon receives them pre-formatted
+	// as `--property` flags.
+	Properties map[string]json.RawMessage `json:"properties,omitempty"`
 }
 
 // QuickCreateIssueResponse echoes the queued task id so the frontend can
@@ -3099,9 +3103,14 @@ func (h *Handler) QuickCreateIssue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !h.checkRequiredIssueProperties(w, r, wsUUID, nil) {
+	properties, ok := parseIssueCreateProperties(w, req.Properties)
+	if !ok {
 		return
 	}
+	if !h.checkRequiredIssueProperties(w, r, wsUUID, properties) {
+		return
+	}
+	propertyFlags := h.formatQuickCreatePropertyFlags(r, wsUUID, properties)
 	requesterUUID, ok := parseUUIDOrBadRequest(w, requesterID, "requester_id")
 	if !ok {
 		return
@@ -3255,7 +3264,7 @@ func (h *Handler) QuickCreateIssue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	task, err := h.TaskService.EnqueueQuickCreateTask(r.Context(), wsUUID, requesterUUID, agentUUID, squadUUID, prompt, priority, dueDate, projectUUID, parentIssueUUID, attachmentIDs)
+	task, err := h.TaskService.EnqueueQuickCreateTask(r.Context(), wsUUID, requesterUUID, agentUUID, squadUUID, prompt, priority, dueDate, projectUUID, parentIssueUUID, attachmentIDs, propertyFlags)
 	if err != nil {
 		if writeIssueLimitReached(w, err) {
 			return
@@ -3515,6 +3524,139 @@ func (h *Handler) checkRequiredIssueProperties(w http.ResponseWriter, r *http.Re
 		"missing_properties": missing,
 	})
 	return false
+}
+
+// formatQuickCreatePropertyFlags renders parsed quick-create property values
+// as "<definitionId>=<value>" pairs for the daemon's `--property` flags. The
+// CLI accepts a UUID as the property identifier and ids as option/actor
+// values, so the pairs never depend on user-visible names. Values this helper
+// cannot represent are skipped rather than failing the enqueue: the agent's
+// create call re-validates every value, so a skipped pair degrades to
+// "property left unset", never to a malformed write.
+func (h *Handler) formatQuickCreatePropertyFlags(r *http.Request, wsUUID pgtype.UUID, parsed map[pgtype.UUID]json.RawMessage) []string {
+	if len(parsed) == 0 {
+		return nil
+	}
+	rows, err := h.Queries.ListIssueProperties(r.Context(), db.ListIssuePropertiesParams{
+		WorkspaceID:     wsUUID,
+		IncludeArchived: false,
+	})
+	if err != nil {
+		return nil
+	}
+	types := make(map[string]string, len(rows))
+	for _, row := range rows {
+		types[uuidToString(row.ID)] = row.Type
+	}
+	flags := make([]string, 0, len(parsed))
+	for id, raw := range parsed {
+		defType, known := types[uuidToString(id)]
+		if !known {
+			continue
+		}
+		if val, ok := quickCreatePropertyValue(defType, raw); ok {
+			flags = append(flags, uuidToString(id)+"="+val)
+		}
+	}
+	sort.Strings(flags)
+	return flags
+}
+
+func quickCreatePropertyValue(defType string, raw json.RawMessage) (string, bool) {
+	var v any
+	if err := json.Unmarshal(raw, &v); err != nil || v == nil {
+		return "", false
+	}
+	switch defType {
+	case "checkbox":
+		b, ok := v.(bool)
+		if !ok {
+			return "", false
+		}
+		if b {
+			return "true", true
+		}
+		return "false", true
+	case "number":
+		n, ok := v.(float64)
+		if !ok {
+			return "", false
+		}
+		return strconv.FormatFloat(n, 'f', -1, 64), true
+	case "url":
+		switch u := v.(type) {
+		case string:
+			if s := strings.TrimSpace(u); s != "" {
+				return s, true
+			}
+		case map[string]any:
+			if s, ok := u["url"].(string); ok {
+				if s = strings.TrimSpace(s); s != "" {
+					return s, true
+				}
+			}
+		}
+		return "", false
+	case "select":
+		s, ok := v.(string)
+		return s, ok && s != ""
+	case "multi_select":
+		items, ok := v.([]any)
+		if !ok || len(items) == 0 {
+			return "", false
+		}
+		parts := make([]string, 0, len(items))
+		for _, item := range items {
+			if str, ok := item.(string); ok && str != "" {
+				parts = append(parts, str)
+			}
+		}
+		if len(parts) == 0 {
+			return "", false
+		}
+		return strings.Join(parts, ","), true
+	case "actor", "multi_actor":
+		parts := make([]string, 0, 2)
+		switch refs := v.(type) {
+		case string:
+			if s := actorRefIdentifier(refs); s != "" {
+				parts = append(parts, s)
+			}
+		case []any:
+			for _, item := range refs {
+				switch ref := item.(type) {
+				case string:
+					if s := actorRefIdentifier(ref); s != "" {
+						parts = append(parts, s)
+					}
+				case map[string]any:
+					if id, ok := ref["id"].(string); ok && id != "" {
+						parts = append(parts, id)
+					}
+				}
+			}
+		}
+		if len(parts) == 0 {
+			return "", false
+		}
+		return strings.Join(parts, ","), true
+	default: // text, date
+		if s, ok := v.(string); ok {
+			if s = strings.TrimSpace(s); s != "" {
+				return s, true
+			}
+		}
+		return "", false
+	}
+}
+
+// actorRefIdentifier unwraps the "<kind>:<uuid>" member key into its uuid; a
+// bare value is returned unchanged.
+func actorRefIdentifier(ref string) string {
+	if idx := strings.IndexByte(ref, ':'); idx >= 0 {
+		return strings.TrimSpace(ref[idx+1:])
+	}
+	return strings.TrimSpace(ref)
 }
 
 func parseIssueCreateProperties(w http.ResponseWriter, values map[string]json.RawMessage) (map[pgtype.UUID]json.RawMessage, bool) {

@@ -315,6 +315,14 @@ func buildQuickCreatePrompt(task Task) string {
 		fmt.Fprintf(&b, "- **due-date**: required for this run. Pass `--due-date %s`; the quick-create selection is authoritative.\n\n", task.QuickCreateDueDate)
 	}
 
+	if len(task.QuickCreateProperties) > 0 {
+		b.WriteString("- **custom properties**: the modal authoritatively selected these custom properties. Pass each one verbatim as its own `--property` flag on `multica issue create` — do not re-derive, rename, or drop any of them:\n")
+		for _, prop := range task.QuickCreateProperties {
+			fmt.Fprintf(&b, "    - `--property %q`\n", prop)
+		}
+		b.WriteString("\n")
+	}
+
 	// project — pinned by the modal when the user picked one, otherwise
 	// omitted so the platform routes to the workspace default. Always pass
 	// the UUID (never a name) so the issue lands in the right project even

@@ -233,6 +233,7 @@ func TestEnqueueQuickCreateTaskWithSourceContextIsAtomic(t *testing.T) {
 		pgtype.UUID{},
 		pgtype.UUID{},
 		nil,
+		nil,
 		successCapture,
 	)
 	if err != nil {
@@ -264,6 +265,7 @@ func TestEnqueueQuickCreateTaskWithSourceContextIsAtomic(t *testing.T) {
 		"",
 		pgtype.UUID{},
 		pgtype.UUID{},
+		nil,
 		nil,
 		rollbackCapture,
 	)

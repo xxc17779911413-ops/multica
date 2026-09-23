@@ -55,6 +55,7 @@ func TestQuickCreateFailure_DoesNotSubscribeRequester(t *testing.T) {
 		pgtype.UUID{},
 		pgtype.UUID{},
 		nil,
+		nil,
 	)
 	if err != nil {
 		t.Fatalf("EnqueueQuickCreateTask: %v", err)
