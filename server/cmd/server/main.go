@@ -306,6 +306,12 @@ func newMainHTTPServer(addr string, handler http.Handler) *http.Server {
 }
 
 func main() {
+	// Operational subcommands run before any server configuration is
+	// validated: `server admin reset-password` must work in the deployed
+	// container even when the server itself would refuse to boot.
+	if len(os.Args) > 1 && os.Args[1] == "admin" {
+		os.Exit(runAdmin(os.Args[2:]))
+	}
 	logger.Init()
 	// Read the opt-out before constructing any telemetry dependency. In the
 	// disabled case no collector or HTTP client is ever created.
