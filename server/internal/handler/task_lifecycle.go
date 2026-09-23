@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/multica-ai/multica/server/internal/service"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
+	"github.com/multica-ai/multica/server/pkg/projectauth"
 )
 
 // RecoverOrphanedTasks is called by the daemon at startup for each runtime
@@ -166,6 +167,12 @@ func (h *Handler) RerunIssue(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	issue, ok := h.loadIssueForUser(w, r, id)
 	if !ok {
+		return
+	}
+	if !h.requireIssueProjectPermission(w, r, issue, projectauth.AgentUse) {
+		return
+	}
+	if rejectArchivedIssueMutation(w, issue) {
 		return
 	}
 

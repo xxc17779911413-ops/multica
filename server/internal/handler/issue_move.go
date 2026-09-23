@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/multica-ai/multica/server/internal/util"
+	"github.com/multica-ai/multica/server/pkg/projectauth"
 )
 
 var issueMoveFields = map[string]struct{}{
@@ -35,6 +36,16 @@ func (h *Handler) MoveIssue(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	current, ok := h.loadIssueForUser(w, r, id)
 	if !ok {
+		return
+	}
+	// 2026-08-27 coder(lq): Moving an issue mutates its ordering and possibly
+	// its project, so View access from loadIssueForUser is insufficient. Check
+	// Edit before parsing fields or resolving anchors to avoid leaking target
+	// project/anchor validation details to viewers.
+	if !h.requireIssueProjectPermission(w, r, current, projectauth.IssueManage) {
+		return
+	}
+	if rejectArchivedIssueMutation(w, current) {
 		return
 	}
 

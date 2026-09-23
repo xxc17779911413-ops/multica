@@ -9,6 +9,7 @@ import (
 
 const (
 	labelSource         = "source"
+	labelSurface        = "surface"
 	labelRuntimeMode    = "runtime_mode"
 	labelProvider       = "provider"
 	labelTerminalStatus = "terminal_status"
@@ -107,6 +108,12 @@ var businessMetricLabels = map[string][]string{
 	"multica_entitlement_decision_total":               {labelGate, labelAction, labelReason},
 	"multica_entitlement_version_regression_total":     {},
 	"multica_autopilot_quota_decision_total":           {labelAction, labelSource, labelResult},
+	"multica_issue_window_decision_total":              {labelAction, labelSurface, labelResult},
+	"multica_projectauth_decision_total":               {labelAction, labelResult},
+	"multica_projectauth_shadow_comparison_total":      {labelSurface, labelResult},
+	"multica_projectauth_operation_duration_seconds":   {labelSurface},
+	"multica_projectauth_slow_operation_total":         {labelSurface},
+	"multica_projectauth_agent_claim_total":            {labelAction, labelResult},
 }
 
 var forbiddenMetricLabels = map[string]struct{}{

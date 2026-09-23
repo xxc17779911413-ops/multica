@@ -176,6 +176,11 @@ const (
 	// only repeat an isolation failure.
 	ReasonInvalidTaskIdentity Reason = "invalid_task_identity"
 
+	// ReasonTaskPermissionRevoked: the task's accountable human no longer has
+	// task.agent.use when the server rechecks a durable claim. The process is
+	// never launched and retrying without a new grant cannot succeed.
+	ReasonTaskPermissionRevoked Reason = "task_permission_revoked"
+
 	// ReasonRuntimeAccessDenied: the daemon refused a claimed task because
 	// a private runtime does not authorize the task's agent — the runtime
 	// owner and the agent owner differ, a private owned runtime was paired
@@ -290,6 +295,7 @@ var allReasons = []Reason{
 	ReasonRuntimeCLITimeout,
 	ReasonEnvironmentPrepareFailed,
 	ReasonInvalidTaskIdentity,
+	ReasonTaskPermissionRevoked,
 	ReasonRuntimeAccessDenied,
 
 	// Agent process side: provider errors.

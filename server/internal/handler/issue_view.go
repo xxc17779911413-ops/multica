@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -10,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
+	"github.com/multica-ai/multica/server/pkg/projectauth"
 )
 
 // Saved issue views (MUL-4796): server-backed filter definitions with
@@ -97,6 +99,50 @@ func issueViewToResponse(v db.IssueView) IssueViewResponse {
 // ever match the owner branch.)
 func canReadIssueView(v db.IssueView, userID pgtype.UUID) bool {
 	return v.OwnerID == userID || v.Visibility == "workspace"
+}
+
+// 2026-08-27 coder(lq): Project-scoped views are only metadata until the
+// client evaluates their query, so the view itself must inherit project View
+// permission to avoid leaking a hidden project's existence or filter scope.
+func (h *Handler) issueViewProjectAllowed(ctx context.Context, view db.IssueView, userID string) (bool, error) {
+	if h.ProjectAuth == nil || !h.ProjectAuth.Enabled() || view.ScopeType != "project" {
+		return true, nil
+	}
+	if !view.ScopeID.Valid {
+		return false, nil
+	}
+	member, err := h.getWorkspaceMember(ctx, userID, uuidToString(view.WorkspaceID))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return false, nil
+		}
+		return false, err
+	}
+	subject := projectauth.Subject{
+		UserID:        userID,
+		WorkspaceID:   uuidToString(view.WorkspaceID),
+		WorkspaceRole: projectauth.WorkspaceRole(member.Role),
+	}
+	if err := h.ProjectAuth.Check(ctx, subject, uuidToString(view.ScopeID), projectauth.View); err != nil {
+		if errors.Is(err, projectauth.ErrDisabled) {
+			return false, err
+		}
+		return false, nil
+	}
+	return true, nil
+}
+
+func (h *Handler) requireIssueViewProjectPermission(w http.ResponseWriter, r *http.Request, view db.IssueView, userID string) bool {
+	allowed, err := h.issueViewProjectAllowed(r.Context(), view, userID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to check project permissions")
+		return false
+	}
+	if !allowed {
+		writeError(w, http.StatusNotFound, "view not found")
+		return false
+	}
+	return true
 }
 
 func isJSONObject(raw json.RawMessage) bool {
@@ -202,6 +248,9 @@ func (h *Handler) CreateIssueView(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusNotFound, "project not found")
 			return
 		}
+		if !h.requireProjectPermission(w, r, uuidToString(projUUID), uuidToString(wsUUID), projectauth.View) {
+			return
+		}
 		scopeID = projUUID
 	case "my":
 		// My Issues is a per-user perspective; sharing it is meaningless.
@@ -261,6 +310,26 @@ func (h *Handler) ListIssueViews(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to list views")
 		return
 	}
+	if h.ProjectAuth != nil && h.ProjectAuth.Enabled() && scopeType == "project" {
+		visibleProjects, err := h.visibleProjectIDSet(r.Context(), uuidToString(wsUUID), userID)
+		if err != nil {
+			if errors.Is(err, projectauth.ErrNotWorkspaceMember) {
+				visibleProjects = map[pgtype.UUID]struct{}{}
+			} else {
+				writeError(w, http.StatusInternalServerError, "failed to list views")
+				return
+			}
+		}
+		filtered := views[:0]
+		for _, view := range views {
+			if view.ScopeID.Valid {
+				if _, ok := visibleProjects[view.ScopeID]; ok {
+					filtered = append(filtered, view)
+				}
+			}
+		}
+		views = filtered
+	}
 	resp := make([]IssueViewResponse, len(views))
 	for i, v := range views {
 		resp[i] = issueViewToResponse(v)
@@ -285,6 +354,9 @@ func (h *Handler) loadIssueViewForUser(w http.ResponseWriter, r *http.Request, u
 	})
 	if err != nil || !canReadIssueView(view, parseUUID(userID)) {
 		writeError(w, http.StatusNotFound, "view not found")
+		return db.IssueView{}, pgtype.UUID{}, false
+	}
+	if !h.requireIssueViewProjectPermission(w, r, view, userID) {
 		return db.IssueView{}, pgtype.UUID{}, false
 	}
 	return view, wsUUID, true

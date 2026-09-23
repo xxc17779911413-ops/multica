@@ -1855,6 +1855,8 @@ var ErrChatTaskAgentNoRuntime = errors.New("chat task: agent has no runtime")
 // or the latest turn is a no_response / failure with nothing to suggest from).
 var ErrChatQuickActionsNoTurn = errors.New("chat quick actions: no assistant turn to regenerate")
 
+var ErrArchivedIssue = errors.New("archived issue cannot be modified or start a new agent run")
+
 // ErrChatQuickActionsUnavailable signals that the deployment has no LLM layer
 // configured (no MULTICA_LLM_API_KEY / MULTICA_LLM_BASE_URL), so suggestions
 // cannot be generated at all. Automatic generation degrades silently in that

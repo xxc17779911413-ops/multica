@@ -18,12 +18,14 @@ import (
 	"github.com/multica-ai/multica/server/internal/logger"
 	"github.com/multica-ai/multica/server/internal/util"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
+	"github.com/multica-ai/multica/server/pkg/projectauth"
 	"github.com/multica-ai/multica/server/pkg/protocol"
 )
 
 type ProjectResponse struct {
 	ID          string  `json:"id"`
 	WorkspaceID string  `json:"workspace_id"`
+	CreatedBy   *string `json:"created_by"`
 	Title       string  `json:"title"`
 	Description *string `json:"description"`
 	Icon        *string `json:"icon"`
@@ -44,12 +46,23 @@ type ProjectResponse struct {
 	// payload to keep parent metadata and child collections separate; clients
 	// that need the list call ListProjectResources directly.
 	ResourceCount int64 `json:"resource_count"`
+	// CurrentUserRole is the caller's explicit role on this project. Workspace
+	// owner inheritance is an access-control rule, not a project membership, so
+	// it is intentionally omitted from this display field. It stays null for
+	// legacy deployments with permissions disabled.
+	// 2026-08-31 coder(lq): Keep project-role display separate from workspace role.
+	CurrentUserRole *string `json:"current_user_role"`
+	// CanDelete mirrors the SettingsManage check used by DeleteProject so the
+	// client does not infer project permissions from the caller's workspace role.
+	// 2026-09-07 coder(lq): Expose the effective delete capability to project views.
+	CanDelete bool `json:"can_delete"`
 }
 
 func projectToResponse(p db.Project) ProjectResponse {
 	return ProjectResponse{
 		ID:          uuidToString(p.ID),
 		WorkspaceID: uuidToString(p.WorkspaceID),
+		CreatedBy:   uuidToPtr(p.CreatedBy),
 		Title:       p.Title,
 		Description: textToPtr(p.Description),
 		Icon:        textToPtr(p.Icon),
@@ -62,6 +75,137 @@ func projectToResponse(p db.Project) ProjectResponse {
 		CreatedAt:   timestampToString(p.CreatedAt),
 		UpdatedAt:   timestampToString(p.UpdatedAt),
 	}
+}
+
+// projectRoleAllowsSettingsManage resolves configurable role permissions while
+// keeping the built-in policy available during rolling upgrades or storage
+// failures. Metadata failures must not make an otherwise valid project read fail.
+// 2026-09-07 coder(lq): Keep list annotation batch-friendly and fail closed.
+func (h *Handler) projectRoleAllowsSettingsManage(ctx context.Context, workspaceID string, role projectauth.ProjectRole) bool {
+	if h.DB != nil {
+		permissions, found, err := (&projectAuthRepository{db: h.DB}).RolePermissions(ctx, workspaceID, role)
+		if err == nil && found {
+			for _, permission := range permissions {
+				if permission == projectauth.SettingsManage {
+					return true
+				}
+			}
+			return false
+		}
+		if err != nil {
+			slog.Warn("failed to resolve project role permissions", "workspace_id", workspaceID, "role", role, "error", err)
+		}
+	}
+	return projectauth.DefaultPolicy().Allows(role, projectauth.SettingsManage)
+}
+
+// annotateProjectAccess annotates a project collection without issuing a
+// permission check per row. The role lookup and workspace membership lookup are
+// each performed once, and role capabilities are cached by unique role.
+// 2026-09-07 coder(lq): Align project list actions with backend authorization.
+func (h *Handler) annotateProjectAccess(ctx context.Context, workspaceID, userID string, includeWorkspaceOwned bool, projects []ProjectResponse) {
+	if userID == "" || len(projects) == 0 {
+		return
+	}
+
+	if h.ProjectAuth == nil || !h.ProjectAuth.Enabled() {
+		member, err := h.getWorkspaceMember(ctx, userID, workspaceID)
+		if err == nil && (member.Role == "owner" || member.Role == "admin") {
+			for i := range projects {
+				projects[i].CanDelete = true
+			}
+		}
+		return
+	}
+
+	roles, err := h.ProjectAuth.CurrentProjectRoles(ctx, workspaceID, userID)
+	if err != nil {
+		slog.Warn("failed to load current project roles", "workspace_id", workspaceID, "user_id", userID, "error", err)
+		roles = map[string]projectauth.ProjectRole{}
+	}
+
+	workspaceOwnerBypass := false
+	if includeWorkspaceOwned {
+		member, memberErr := h.getWorkspaceMember(ctx, userID, workspaceID)
+		if memberErr == nil && member.Role == "owner" {
+			bypassEnabled, bypassErr := h.ProjectAuth.WorkspaceOwnerBypassEnabled(ctx, workspaceID)
+			if bypassErr != nil {
+				slog.Warn("failed to resolve workspace owner bypass", "workspace_id", workspaceID, "error", bypassErr)
+			} else {
+				workspaceOwnerBypass = bypassEnabled
+			}
+		}
+	}
+
+	roleCanDelete := make(map[projectauth.ProjectRole]bool)
+	for i := range projects {
+		project := &projects[i]
+		if role, ok := roles[project.ID]; ok {
+			value := string(role)
+			project.CurrentUserRole = &value
+			canDelete, cached := roleCanDelete[role]
+			if !cached {
+				canDelete = h.projectRoleAllowsSettingsManage(ctx, workspaceID, role)
+				roleCanDelete[role] = canDelete
+			}
+			project.CanDelete = canDelete
+		}
+		if project.CreatedBy != nil && *project.CreatedBy == userID {
+			project.CanDelete = true
+		}
+		if workspaceOwnerBypass {
+			project.CanDelete = true
+		}
+	}
+}
+
+// annotateOneProjectAccess uses the same authoritative permission check as
+// DeleteProject. It is intended for single-project reads and writes where one
+// check does not introduce an N+1 query pattern.
+// 2026-09-07 coder(lq): Keep detail actions consistent with deletion enforcement.
+func (h *Handler) annotateOneProjectAccess(ctx context.Context, workspaceID, userID string, includeWorkspaceOwned bool, project *ProjectResponse) {
+	if project == nil || userID == "" {
+		return
+	}
+	if h.ProjectAuth == nil || !h.ProjectAuth.Enabled() {
+		member, err := h.getWorkspaceMember(ctx, userID, workspaceID)
+		if err == nil && (member.Role == "owner" || member.Role == "admin") {
+			project.CanDelete = true
+		}
+		return
+	}
+
+	if roles, err := h.ProjectAuth.CurrentProjectRoles(ctx, workspaceID, userID); err == nil {
+		if role, ok := roles[project.ID]; ok {
+			value := string(role)
+			project.CurrentUserRole = &value
+		}
+	} else {
+		slog.Warn("failed to load current project role", "workspace_id", workspaceID, "project_id", project.ID, "user_id", userID, "error", err)
+	}
+	project.CanDelete = h.ProjectAuth.CheckWithWorkspaceScope(
+		ctx,
+		projectauth.Subject{UserID: userID, WorkspaceID: workspaceID},
+		project.ID,
+		projectauth.SettingsManage,
+		includeWorkspaceOwned,
+	) == nil
+}
+
+// annotateCreatedProjectAccess avoids re-reading a project immediately after
+// its owner grant has committed. The creator is the immutable project Owner.
+// 2026-09-07 coder(lq): Return creation responses with immediately usable actions.
+func (h *Handler) annotateCreatedProjectAccess(ctx context.Context, workspaceID, userID string, project *ProjectResponse) {
+	if project == nil {
+		return
+	}
+	if h.ProjectAuth != nil && h.ProjectAuth.Enabled() {
+		role := string(projectauth.ProjectOwner)
+		project.CurrentUserRole = &role
+		project.CanDelete = true
+		return
+	}
+	h.annotateOneProjectAccess(ctx, workspaceID, userID, true, project)
 }
 
 func (h *Handler) loadProjectIssueStats(ctx context.Context, workspaceID, projectID pgtype.UUID) (int64, int64) {
@@ -109,6 +253,17 @@ type CreateProjectRequest struct {
 	StartDate   *string                               `json:"start_date"`
 	DueDate     *string                               `json:"due_date"`
 	Resources   []CreateProjectResourceRequestPayload `json:"resources,omitempty"`
+	// 2026-09-01 coder(lq): Persist creation-time grants in the same
+	// transaction as the project so a failed authorization cannot leave a
+	// project with only a partial or legacy membership state.
+	AccessGrants []CreateProjectAccessGrantRequest `json:"access_grants,omitempty"`
+}
+
+type CreateProjectAccessGrantRequest struct {
+	SubjectType projectauth.SubjectType `json:"subject_type"`
+	SubjectID   string                  `json:"subject_id"`
+	Role        projectauth.ProjectRole `json:"role"`
+	Permission  projectauth.Permission  `json:"permission"`
 }
 
 // CreateProjectResourceRequestPayload mirrors CreateProjectResourceRequest but
@@ -156,7 +311,31 @@ func (h *Handler) ListProjects(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to list projects")
 		return
 	}
-
+	var currentUserID string
+	if h.ProjectAuth != nil && h.ProjectAuth.Enabled() {
+		userID, ok := requireUserID(w, r)
+		if !ok {
+			return
+		}
+		currentUserID = userID
+		includeWorkspaceOwned := r.URL.Query().Get("include_workspace_owned") != "false"
+		visible, err := h.ProjectAuth.ScopeWithWorkspaceOwned(r.Context(), projectauth.Subject{UserID: userID, WorkspaceID: workspaceID}, includeWorkspaceOwned)
+		if err != nil {
+			writeProjectAuthError(w, err)
+			return
+		}
+		allowed := make(map[string]struct{}, len(visible))
+		for _, id := range visible {
+			allowed[id] = struct{}{}
+		}
+		filtered := projects[:0]
+		for _, project := range projects {
+			if _, ok := allowed[uuidToString(project.ID)]; ok {
+				filtered = append(filtered, project)
+			}
+		}
+		projects = filtered
+	}
 	// Batch-fetch issue stats and resource counts for all projects
 	statsMap := make(map[string]db.GetProjectIssueStatsRow)
 	resourceCountMap := make(map[string]int64)
@@ -193,6 +372,11 @@ func (h *Handler) ListProjects(w http.ResponseWriter, r *http.Request) {
 		}
 		resp[i].ResourceCount = resourceCountMap[resp[i].ID]
 	}
+	annotateUserID := currentUserID
+	if annotateUserID == "" {
+		annotateUserID = requestUserID(r)
+	}
+	h.annotateProjectAccess(r.Context(), workspaceID, annotateUserID, includeWorkspaceOwnedFromRequest(r), resp)
 	writeJSON(w, http.StatusOK, map[string]any{"projects": resp, "total": len(resp)})
 }
 
@@ -214,9 +398,13 @@ func (h *Handler) GetProject(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "project not found")
 		return
 	}
+	if !h.requireProjectPermission(w, r, id, workspaceID, projectauth.View) {
+		return
+	}
 	resp := projectToResponse(project)
 	resp.IssueCount, resp.DoneCount = h.loadProjectIssueStats(r.Context(), wsUUID, project.ID)
 	resp.ResourceCount = h.loadProjectResourceCount(r.Context(), project.ID)
+	h.annotateOneProjectAccess(r.Context(), workspaceID, requestUserID(r), includeWorkspaceOwnedFromRequest(r), &resp)
 	writeJSON(w, http.StatusOK, resp)
 }
 
@@ -255,6 +443,46 @@ func (h *Handler) writeProjectWriteError(w http.ResponseWriter, r *http.Request,
 	writeError(w, http.StatusInternalServerError, "failed to "+action+" project")
 }
 
+// 2026-08-27 coder(lq): Bind owner initialization to the project transaction
+// so enabling project permissions cannot leave a committed project without an
+// owner when the membership insert fails.
+func (h *Handler) ensureProjectOwnerInTx(ctx context.Context, tx pgx.Tx, projectID, userID string) error {
+	if h.ProjectAuth == nil || !h.ProjectAuth.Enabled() {
+		return nil
+	}
+	return projectauth.New(newProjectAuthRepository(tx), true).EnsureOwner(ctx, projectID, userID)
+}
+
+// 2026-09-01 coder(lq): Creation-time grants share the project transaction.
+// This keeps the project row, its owner, and every requested user/organization/
+// everyone grant atomic; a bad subject or role rolls back the whole create.
+func (h *Handler) initializeProjectAccessInTx(ctx context.Context, tx pgx.Tx, workspaceID, projectID, userID string, requests []CreateProjectAccessGrantRequest) error {
+	if h.ProjectAuth == nil || !h.ProjectAuth.Enabled() || len(requests) == 0 {
+		return nil
+	}
+	repo := newProjectAuthRepository(tx)
+	workspaceRole, err := repo.WorkspaceRole(ctx, workspaceID, userID)
+	if err != nil {
+		return err
+	}
+	actor := projectauth.Subject{UserID: userID, WorkspaceID: workspaceID, WorkspaceRole: workspaceRole}
+	service := projectauth.New(repo, true)
+	for _, request := range requests {
+		grant := projectauth.AccessGrant{
+			WorkspaceID: workspaceID,
+			ProjectID:   projectID,
+			SubjectType: request.SubjectType,
+			SubjectID:   strings.TrimSpace(request.SubjectID),
+			Role:        projectauth.RoleKey(request.Role),
+			Permission:  request.Permission,
+		}
+		if err := service.GrantAccess(ctx, actor, grant); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (h *Handler) CreateProject(w http.ResponseWriter, r *http.Request) {
 	var req CreateProjectRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -263,6 +491,9 @@ func (h *Handler) CreateProject(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Title == "" {
 		writeError(w, http.StatusBadRequest, "title is required")
+		return
+	}
+	if len(req.AccessGrants) > 0 && !h.requireProjectAuthorizationEnabled(w) {
 		return
 	}
 	workspaceID := h.resolveWorkspaceID(r)
@@ -380,14 +611,64 @@ func (h *Handler) CreateProject(w http.ResponseWriter, r *http.Request) {
 		DueDate:     dueDate,
 	}
 
-	// Without resources, keep the simple non-tx path.
-	if len(req.Resources) == 0 {
+	// Preserve the upstream non-transactional path while the overlay is off.
+	if len(req.Resources) == 0 && (h.ProjectAuth == nil || !h.ProjectAuth.Enabled()) {
 		project, err := h.Queries.CreateProject(r.Context(), createParams)
 		if err != nil {
 			h.writeProjectWriteError(w, r, err, "create")
 			return
 		}
 		resp := projectToResponse(project)
+		h.annotateCreatedProjectAccess(r.Context(), workspaceID, userID, &resp)
+		h.publish(protocol.EventProjectCreated, workspaceID, "member", userID, map[string]any{"project": resp})
+		writeJSON(w, http.StatusCreated, resp)
+		return
+	}
+
+	// Keep project creation and owner initialization atomic when the overlay is
+	// enabled, even when no resources are attached.
+	if len(req.Resources) == 0 {
+		tx, err := h.TxStarter.Begin(r.Context())
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to start transaction")
+			return
+		}
+		defer tx.Rollback(r.Context())
+		project, err := h.Queries.WithTx(tx).CreateProject(r.Context(), createParams)
+		if err != nil {
+			h.writeProjectWriteError(w, r, err, "create")
+			return
+		}
+		if err := h.ensureProjectOwnerInTx(r.Context(), tx, uuidToString(project.ID), userID); err != nil {
+			slog.Error("seed project owner failed", append(logger.RequestAttrs(r), "project_id", uuidToString(project.ID), "error", err)...)
+			writeProjectAccessGrantError(w, err)
+			return
+		}
+		if err := h.initializeProjectAccessInTx(r.Context(), tx, workspaceID, uuidToString(project.ID), userID, req.AccessGrants); err != nil {
+			slog.Error("initialize project access grants failed", append(logger.RequestAttrs(r), "project_id", uuidToString(project.ID), "error", err)...)
+			writeProjectAccessGrantError(w, err)
+			return
+		}
+		if h.ProjectAuth.Enabled() {
+			if err := promoteMemberLeadWithExecutor(r.Context(), tx, uuidToString(project.ID), project.LeadType, project.LeadID); err != nil {
+				slog.Error("grant project lead owner failed", append(logger.RequestAttrs(r), "project_id", uuidToString(project.ID), "error", err)...)
+				writeProjectAccessGrantError(w, err)
+				return
+			}
+		}
+		if h.ProjectAuth.Enabled() && project.Description.Valid {
+			if err := promoteMentionedMembersWithExecutor(r.Context(), tx, uuidToString(project.ID), project.Description.String); err != nil {
+				slog.Error("grant mentioned project viewers failed", append(logger.RequestAttrs(r), "project_id", uuidToString(project.ID), "error", err)...)
+				writeError(w, http.StatusInternalServerError, "failed to initialize mentioned member permissions")
+				return
+			}
+		}
+		if err := tx.Commit(r.Context()); err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to commit project create")
+			return
+		}
+		resp := projectToResponse(project)
+		h.annotateCreatedProjectAccess(r.Context(), workspaceID, userID, &resp)
 		h.publish(protocol.EventProjectCreated, workspaceID, "member", userID, map[string]any{"project": resp})
 		writeJSON(w, http.StatusCreated, resp)
 		return
@@ -438,6 +719,30 @@ func (h *Handler) CreateProject(w http.ResponseWriter, r *http.Request) {
 		}
 		resourceRows = append(resourceRows, row)
 	}
+	if err := h.ensureProjectOwnerInTx(r.Context(), tx, uuidToString(project.ID), userID); err != nil {
+		slog.Error("seed project owner failed", append(logger.RequestAttrs(r), "project_id", uuidToString(project.ID), "error", err)...)
+		writeProjectAccessGrantError(w, err)
+		return
+	}
+	if err := h.initializeProjectAccessInTx(r.Context(), tx, workspaceID, uuidToString(project.ID), userID, req.AccessGrants); err != nil {
+		slog.Error("initialize project access grants failed", append(logger.RequestAttrs(r), "project_id", uuidToString(project.ID), "error", err)...)
+		writeProjectAccessGrantError(w, err)
+		return
+	}
+	if h.ProjectAuth != nil && h.ProjectAuth.Enabled() {
+		if err := promoteMemberLeadWithExecutor(r.Context(), tx, uuidToString(project.ID), project.LeadType, project.LeadID); err != nil {
+			slog.Error("grant project lead owner failed", append(logger.RequestAttrs(r), "project_id", uuidToString(project.ID), "error", err)...)
+			writeProjectAccessGrantError(w, err)
+			return
+		}
+	}
+	if h.ProjectAuth != nil && h.ProjectAuth.Enabled() && project.Description.Valid {
+		if err := promoteMentionedMembersWithExecutor(r.Context(), tx, uuidToString(project.ID), project.Description.String); err != nil {
+			slog.Error("grant mentioned project viewers failed", append(logger.RequestAttrs(r), "project_id", uuidToString(project.ID), "error", err)...)
+			writeError(w, http.StatusInternalServerError, "failed to initialize mentioned member permissions")
+			return
+		}
+	}
 	if err := tx.Commit(r.Context()); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to commit project create")
 		return
@@ -484,6 +789,9 @@ func (h *Handler) UpdateProject(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		writeError(w, http.StatusNotFound, "project not found")
+		return
+	}
+	if !h.requireProjectPermission(w, r, id, workspaceID, projectauth.Edit) {
 		return
 	}
 	userID, ok := requireUserID(w, r)
@@ -585,14 +893,45 @@ func (h *Handler) UpdateProject(w http.ResponseWriter, r *http.Request) {
 			params.DueDate = pgtype.Date{Valid: false} // explicit null = clear date
 		}
 	}
-	project, err := h.Queries.UpdateProject(r.Context(), params)
+	var project db.Project
+	if h.ProjectAuth != nil && h.ProjectAuth.Enabled() {
+		// 2026-08-27 coder(lq): Project metadata and its automatic access grants
+		// commit together, so selecting a lead never produces an inaccessible project.
+		if h.TxStarter == nil {
+			writeError(w, http.StatusInternalServerError, "project update requires transaction support")
+			return
+		}
+		tx, txErr := h.TxStarter.Begin(r.Context())
+		if txErr != nil {
+			writeError(w, http.StatusInternalServerError, "failed to start project update")
+			return
+		}
+		defer tx.Rollback(r.Context())
+		project, err = h.Queries.WithTx(tx).UpdateProject(r.Context(), params)
+		if err == nil {
+			err = promoteMemberLeadWithExecutor(r.Context(), tx, id, project.LeadType, project.LeadID)
+		}
+		if err == nil && project.Description.Valid {
+			err = promoteMentionedMembersWithExecutor(r.Context(), tx, id, project.Description.String)
+		}
+		if err == nil {
+			err = tx.Commit(r.Context())
+		}
+	} else {
+		project, err = h.Queries.UpdateProject(r.Context(), params)
+	}
 	if err != nil {
+		if errors.Is(err, projectauth.ErrMigrationRequired) || errors.Is(err, projectauth.ErrStorageUnavailable) {
+			writeProjectAccessGrantError(w, err)
+			return
+		}
 		h.writeProjectWriteError(w, r, err, "update")
 		return
 	}
 	resp := projectToResponse(project)
 	resp.IssueCount, resp.DoneCount = h.loadProjectIssueStats(r.Context(), wsUUID, project.ID)
 	resp.ResourceCount = h.loadProjectResourceCount(r.Context(), project.ID)
+	h.annotateOneProjectAccess(r.Context(), workspaceID, userID, includeWorkspaceOwnedFromRequest(r), &resp)
 	h.publish(protocol.EventProjectUpdated, workspaceID, "member", userID, map[string]any{"project": resp})
 	writeJSON(w, http.StatusOK, resp)
 }
@@ -615,11 +954,22 @@ func (h *Handler) DeleteProject(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "project not found")
 		return
 	}
-	requester, ok := h.requireWorkspaceRole(w, r, uuidToString(project.WorkspaceID), "project not found", "owner", "admin")
-	if !ok {
-		return
+	var userID string
+	if h.ProjectAuth != nil && h.ProjectAuth.Enabled() {
+		if !h.requireProjectPermission(w, r, id, workspaceID, projectauth.SettingsManage) {
+			return
+		}
+		userID, ok = requireUserID(w, r)
+		if !ok {
+			return
+		}
+	} else {
+		requester, ok := h.requireWorkspaceRole(w, r, uuidToString(project.WorkspaceID), "project not found", "owner", "admin")
+		if !ok {
+			return
+		}
+		userID = uuidToString(requester.UserID)
 	}
-	userID := uuidToString(requester.UserID)
 	tx, err := h.TxStarter.Begin(r.Context())
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to start transaction")
@@ -679,6 +1029,14 @@ type SearchProjectResponse struct {
 
 // buildProjectSearchQuery builds a dynamic SQL query for project search.
 func buildProjectSearchQuery(phrase string, terms []string, includeClosed bool) (string, []any) {
+	return buildProjectSearchQueryForUser(phrase, terms, includeClosed, "")
+}
+
+// 2026-08-27 coder(lq): Keep the upstream search builder's legacy signature
+// for callers/tests while allowing the authenticated endpoint to push project
+// visibility into SQL before LIMIT/OFFSET. Filtering after pagination could
+// hide an authorized project that was ranked beyond an unauthorized row.
+func buildProjectSearchQueryForUser(phrase string, terms []string, includeClosed bool, userID string) (string, []any) {
 	phrase = strings.ToLower(phrase)
 	for i, t := range terms {
 		terms[i] = strings.ToLower(t)
@@ -852,7 +1210,15 @@ func (h *Handler) SearchProjects(w http.ResponseWriter, r *http.Request) {
 	}
 	terms := splitSearchTerms(q)
 
-	sqlQuery, args := buildProjectSearchQuery(q, terms, includeClosed)
+	userID := ""
+	if h.ProjectAuth != nil && h.ProjectAuth.Enabled() {
+		var userOK bool
+		userID, userOK = requireUserID(w, r)
+		if !userOK {
+			return
+		}
+	}
+	sqlQuery, args := buildProjectSearchQueryForUser(q, terms, includeClosed, userID)
 	args[1] = wsUUID
 	args[len(args)-2] = limit
 	args[len(args)-1] = offset

@@ -188,6 +188,12 @@ func TestBusinessMetricsRegistryExposesAllFamilies(t *testing.T) {
 	m.RecordEntitlementVersionRegression()
 	m.RecordAutopilotQuotaDecision("observe", "manual", "admitted")
 	m.ObserveRuntimeSweepStage(RuntimeSweepStageLiveness, time.Second, 2, 1)
+	m.RecordIssueWindowDecision("list", "list", "allow")
+	m.RecordProjectAuthorizationDecision("resolve", "allow")
+	m.RecordProjectAuthorizationShadow("list", "match_allow")
+	m.ObserveProjectAuthorization("single", time.Millisecond)
+	m.ObserveProjectAuthorization("single", 300*time.Millisecond)
+	m.RecordProjectAuthorizationAgentClaim("claim", "allow")
 
 	families, err := registry.Gather()
 	if err != nil {

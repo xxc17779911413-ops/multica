@@ -281,6 +281,16 @@ func (h *Handler) BootstrapOnboardingRuntime(w http.ResponseWriter, r *http.Requ
 			writeError(w, http.StatusInternalServerError, "failed to create onboarding issue")
 			return
 		}
+		if h.ProjectAuth != nil && h.ProjectAuth.Enabled() {
+			// 2026-09-05 coder(lq): This deprecated path predates
+			// IssueService.Create; keep its task creator Owner grant atomic with
+			// the direct issue insert.
+			if err := syncIssueAccessWithExecutor(r.Context(), tx, nil, issue); err != nil {
+				slog.Warn("bootstrap onboarding (shim): sync issue access failed", append(logger.RequestAttrs(r), "error", err, "workspace_id", req.WorkspaceID)...)
+				writeError(w, http.StatusInternalServerError, "failed to grant onboarding issue access")
+				return
+			}
+		}
 		issueCreated = true
 	}
 
@@ -444,6 +454,16 @@ func (h *Handler) BootstrapOnboardingNoRuntime(w http.ResponseWriter, r *http.Re
 			slog.Warn("bootstrap no-runtime onboarding (shim): create issue failed", append(logger.RequestAttrs(r), "error", err, "workspace_id", req.WorkspaceID)...)
 			writeError(w, http.StatusInternalServerError, "failed to create onboarding issue")
 			return
+		}
+		if h.ProjectAuth != nil && h.ProjectAuth.Enabled() {
+			// 2026-09-05 coder(lq): This deprecated path predates
+			// IssueService.Create; keep its task creator Owner grant atomic with
+			// the direct issue insert.
+			if err := syncIssueAccessWithExecutor(r.Context(), tx, nil, issue); err != nil {
+				slog.Warn("bootstrap no-runtime onboarding (shim): sync issue access failed", append(logger.RequestAttrs(r), "error", err, "workspace_id", req.WorkspaceID)...)
+				writeError(w, http.StatusInternalServerError, "failed to grant onboarding issue access")
+				return
+			}
 		}
 		issueCreated = true
 	}

@@ -219,6 +219,52 @@ func (q *Queries) DeleteWorkspaceCommunicationRoots(ctx context.Context, workspa
 	return err
 }
 
+const deleteWorkspaceProjectAuthorization = `-- name: DeleteWorkspaceProjectAuthorization :exec
+WITH
+deleted_request_notifications AS (
+    DELETE FROM projectauth_access_request_notifications WHERE workspace_id = $1
+),
+deleted_access_requests AS (
+    DELETE FROM projectauth_access_requests WHERE workspace_id = $1
+),
+deleted_grant_constraints AS (
+    DELETE FROM projectauth_grant_constraints WHERE workspace_id = $1
+),
+deleted_issue_access_grants AS (
+    DELETE FROM projectauth_issue_access_grants WHERE workspace_id = $1
+),
+deleted_access_grants AS (
+    DELETE FROM projectauth_access_grants WHERE workspace_id = $1
+),
+deleted_issue_policies AS (
+    DELETE FROM projectauth_issue_policies WHERE workspace_id = $1
+),
+workspace_task_roles AS MATERIALIZED (
+    SELECT id FROM projectauth_task_roles WHERE workspace_id = $1
+),
+deleted_task_role_permissions AS (
+    DELETE FROM projectauth_task_role_permissions
+    WHERE role_id IN (SELECT id FROM workspace_task_roles)
+),
+deleted_task_roles AS (
+    DELETE FROM projectauth_task_roles WHERE workspace_id = $1
+),
+deleted_organization_members AS (
+    DELETE FROM projectauth_organization_members WHERE workspace_id = $1
+),
+-- 2026-09-21 coder(lq): Withdrawal watermarks for mention access. No foreign key
+-- reaches workspace, so the teardown has to sweep them explicitly.
+deleted_mention_revocations AS (
+    DELETE FROM projectauth_issue_mention_revocations WHERE workspace_id = $1
+)
+DELETE FROM projectauth_organizations WHERE workspace_id = $1
+`
+
+func (q *Queries) DeleteWorkspaceProjectAuthorization(ctx context.Context, workspaceID pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, deleteWorkspaceProjectAuthorization, workspaceID)
+	return err
+}
+
 const deleteWorkspaceConnections = `-- name: DeleteWorkspaceConnections :exec
 WITH deleted_github_installations AS (
     DELETE FROM github_installation

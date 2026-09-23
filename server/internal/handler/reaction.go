@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/multica-ai/multica/server/internal/logger"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
+	"github.com/multica-ai/multica/server/pkg/projectauth"
 	"github.com/multica-ai/multica/server/pkg/protocol"
 )
 
@@ -92,6 +93,19 @@ func (h *Handler) AddReaction(w http.ResponseWriter, r *http.Request) {
 
 	actorType, actorID := h.resolveActor(r, userID, workspaceID)
 
+	issue, err := h.Queries.GetIssueInWorkspace(r.Context(), db.GetIssueInWorkspaceParams{
+		ID:          comment.IssueID,
+		WorkspaceID: wsUUID,
+	})
+	if err != nil {
+		writeError(w, http.StatusNotFound, "comment not found")
+		return
+	}
+	// 2026-08-27 coder(lq): Reactions are conversation events on the task, so
+	// they follow the same task-level comment permission as posting one.
+	if !h.requireIssueProjectPermission(w, r, issue, projectauth.IssueComment) {
+		return
+	}
 	var reaction db.AddReactionRow
 	err = h.withLiveCommentLock(r.Context(), comment.ID, wsUUID, func(qtx *db.Queries) error {
 		var addErr error
@@ -184,6 +198,19 @@ func (h *Handler) RemoveReaction(w http.ResponseWriter, r *http.Request) {
 
 	// Owner first, like every comment mutation: removing the reaction row and
 	// then bumping the comment would invert the delete transaction's order.
+	issue, err := h.Queries.GetIssueInWorkspace(r.Context(), db.GetIssueInWorkspaceParams{
+		ID:          comment.IssueID,
+		WorkspaceID: wsUUID,
+	})
+	if err != nil {
+		writeError(w, http.StatusNotFound, "comment not found")
+		return
+	}
+	// 2026-08-27 coder(lq): Reactions are conversation events on the task, so
+	// they follow the same task-level comment permission as posting one.
+	if !h.requireIssueProjectPermission(w, r, issue, projectauth.IssueComment) {
+		return
+	}
 	var removed db.RemoveReactionRow
 	err = h.withLiveCommentLock(r.Context(), comment.ID, wsUUID, func(qtx *db.Queries) error {
 		var removeErr error

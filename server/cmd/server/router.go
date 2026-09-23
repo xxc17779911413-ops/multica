@@ -46,6 +46,7 @@ import (
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 	"github.com/multica-ai/multica/server/pkg/featureflag"
 	"github.com/multica-ai/multica/server/pkg/llm"
+	"github.com/multica-ai/multica/server/pkg/projectauth"
 	publicapiv1 "github.com/multica-ai/multica/server/pkg/publicapi/v1"
 )
 
@@ -417,26 +418,29 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 	cfSigner := auth.NewCloudFrontSignerFromEnv()
 	origins := allowedOrigins()
 
+	projectPermissionRollout := projectPermissionRolloutFromEnv()
 	signupConfig := handler.Config{
-		AllowSignup:              os.Getenv("ALLOW_SIGNUP") != "false",
-		AllowedEmails:            splitAndTrim(os.Getenv("ALLOWED_EMAILS")),
-		AllowedEmailDomains:      splitAndTrim(os.Getenv("ALLOWED_EMAIL_DOMAINS")),
-		DisableWorkspaceCreation: os.Getenv("DISABLE_WORKSPACE_CREATION") == "true",
-		VCSIntegrationEnabled:    os.Getenv("MULTICA_VCS_INTEGRATION_ENABLED") == "true",
-		PublicURL:                strings.TrimRight(strings.TrimSpace(os.Getenv("MULTICA_PUBLIC_URL")), "/"),
-		AppURL:                   appURLFromEnv(),
-		TrustedProxies:           parseTrustedProxies(os.Getenv("MULTICA_TRUSTED_PROXIES")),
-		CloudURL:                 strings.TrimSpace(os.Getenv("MULTICA_CLOUD_URL")),
-		CloudTimeout:             35 * time.Second,
-		AttachmentDownloadMode:   os.Getenv("ATTACHMENT_DOWNLOAD_MODE"),
-		AttachmentDownloadURLTTL: envDuration("ATTACHMENT_DOWNLOAD_URL_TTL", 30*time.Minute),
-		AttachmentFrameAncestors: origins,
-		PluginSurfaceOrigin:      strings.TrimRight(strings.TrimSpace(os.Getenv("MULTICA_PLUGIN_SURFACE_ORIGIN")), "/"),
-		LLMAPIKey:                strings.TrimSpace(os.Getenv("MULTICA_LLM_API_KEY")),
-		LLMBaseURL:               strings.TrimSpace(os.Getenv("MULTICA_LLM_BASE_URL")),
-		LLMDefaultModel:          strings.TrimSpace(os.Getenv("MULTICA_LLM_DEFAULT_MODEL")),
-		LLMMaxRetries:            opts.LLMMaxRetries,
-		ServerVersion:            normalizeServerVersion(version),
+		ProjectPermissionEnabled:      projectPermissionRollout.ReaderEnabled(),
+		ProjectPermissionRolloutPhase: projectPermissionRollout,
+		AllowSignup:                   os.Getenv("ALLOW_SIGNUP") != "false",
+		AllowedEmails:                 splitAndTrim(os.Getenv("ALLOWED_EMAILS")),
+		AllowedEmailDomains:           splitAndTrim(os.Getenv("ALLOWED_EMAIL_DOMAINS")),
+		DisableWorkspaceCreation:      os.Getenv("DISABLE_WORKSPACE_CREATION") == "true",
+		VCSIntegrationEnabled:         os.Getenv("MULTICA_VCS_INTEGRATION_ENABLED") == "true",
+		PublicURL:                     strings.TrimRight(strings.TrimSpace(os.Getenv("MULTICA_PUBLIC_URL")), "/"),
+		AppURL:                        appURLFromEnv(),
+		TrustedProxies:                parseTrustedProxies(os.Getenv("MULTICA_TRUSTED_PROXIES")),
+		CloudURL:                      strings.TrimSpace(os.Getenv("MULTICA_CLOUD_URL")),
+		CloudTimeout:                  35 * time.Second,
+		AttachmentDownloadMode:        os.Getenv("ATTACHMENT_DOWNLOAD_MODE"),
+		AttachmentDownloadURLTTL:      envDuration("ATTACHMENT_DOWNLOAD_URL_TTL", 30*time.Minute),
+		AttachmentFrameAncestors:      origins,
+		PluginSurfaceOrigin:           strings.TrimRight(strings.TrimSpace(os.Getenv("MULTICA_PLUGIN_SURFACE_ORIGIN")), "/"),
+		LLMAPIKey:                     strings.TrimSpace(os.Getenv("MULTICA_LLM_API_KEY")),
+		LLMBaseURL:                    strings.TrimSpace(os.Getenv("MULTICA_LLM_BASE_URL")),
+		LLMDefaultModel:               strings.TrimSpace(os.Getenv("MULTICA_LLM_DEFAULT_MODEL")),
+		LLMMaxRetries:                 opts.LLMMaxRetries,
+		ServerVersion:                 normalizeServerVersion(version),
 	}
 	h := handler.New(queries, pool, hub, bus, emailSvc, store, cfSigner, analyticsClient, signupConfig, daemonHub)
 	invitationRateLimits := handler.DefaultInvitationRateLimits()
@@ -524,7 +528,12 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 	// is the single shared inbound handler injected into every Channel.
 	channelRegistry := channel.NewRegistry()
 	channelRouter := engine.NewRouter(h.IssueService, h.TaskService, queries, engine.RouterConfig{
-		Logger: slog.Default(), Lifecycle: h,
+		Logger:    slog.Default(),
+		Lifecycle: h,
+		// 2026-09-05 coder(lq): Keep channel-created task owner grants atomic
+		// with the issue row, matching HTTP, onboarding, and autopilot paths.
+		BeforeIssueCommit:        h.IssueAccessBeforeCommitForChannel(),
+		ProjectPermissionEnabled: signupConfig.ProjectPermissionEnabled,
 	})
 	// Debounce the per-session run trigger so a burst of messages collapses
 	// into one agent run instead of one per message (MUL-2968).
@@ -1958,10 +1967,22 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 			r.Use(middleware.RequireWorkspaceMember(queries))
 
 			// Assignee frequency
+			r.Get("/api/project-permissions/report", h.ListPermissionReport)
+			r.Route("/api/project-permission-roles", func(r chi.Router) {
+				r.Get("/", h.ListProjectPermissionRoles)
+				r.Post("/", h.CreateProjectPermissionRole)
+				r.Route("/{key}", func(r chi.Router) {
+					r.Patch("/", h.UpdateProjectPermissionRole)
+					r.Delete("/", h.DeleteProjectPermissionRole)
+				})
+			})
+			r.Get("/api/task-permission-roles", h.ListTaskPermissionRoles)
+
 			r.Get("/api/assignee-frequency", h.GetAssigneeFrequency)
 
 			// Issues
 			r.Route("/api/issues", func(r chi.Router) {
+				r.Get("/access-request-target/{id}", h.GetIssueAccessRequestTarget)
 				r.Get("/limit-usage", h.GetIssueLimitUsage)
 				r.Post("/table/groups", h.ListIssueTableGroups)
 				r.Post("/table/rows", h.ListIssueTableRows)
@@ -1981,6 +2002,18 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 				r.Post("/batch-delete", h.BatchDeleteIssues)
 				r.Route("/{id}", func(r chi.Router) {
 					r.Get("/", h.GetIssue)
+					r.Get("/effective-access", h.GetIssueEffectiveAccess)
+					r.Post("/access-requests", h.CreateIssueAccessRequest)
+					r.Get("/access-requests", h.ListIssueAccessRequests)
+					r.Post("/access-requests/{requestID}/review", h.ReviewIssueAccessRequest)
+					r.Post("/access-requests/{requestID}/cancel", h.CancelIssueAccessRequest)
+					r.Get("/access-control", h.GetIssueAccessControl)
+					r.Post("/access-control/preview", h.PreviewIssueAccessControl)
+					r.Patch("/access-control", h.PatchIssueAccessControl)
+					r.Post("/access-control/revoke-mention", h.RevokeIssueMentionAccess)
+					r.Get("/access-grants", h.ListIssueAccessGrants)
+					r.Post("/access-grants", h.CreateIssueAccessGrant)
+					r.Delete("/access-grants", h.RevokeIssueAccessGrant)
 					r.Put("/", h.UpdateIssue)
 					r.Post("/move", h.MoveIssue)
 					r.Delete("/", h.DeleteIssue)
@@ -2080,6 +2113,12 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 				r.Post("/", h.CreateProject)
 				r.Route("/{id}", func(r chi.Router) {
 					r.Get("/", h.GetProject)
+					r.Get("/access-grants", h.ListProjectAccessGrants)
+					r.Post("/access-grants", h.CreateProjectAccessGrant)
+					r.Delete("/access-grants", h.RevokeProjectAccessGrant)
+					r.Get("/members", h.ListProjectMembers)
+					r.Post("/members", h.AddProjectMember)
+					r.Delete("/members/{userId}", h.RemoveProjectMember)
 					r.Put("/", h.UpdateProject)
 					r.Delete("/", h.DeleteProject)
 					r.Get("/resources", h.ListProjectResources)
@@ -2619,4 +2658,18 @@ func wecomMetricsOrNil(m *obsmetrics.WecomMetrics) wecom.Metrics {
 		return nil
 	}
 	return m
+}
+
+func projectPermissionRolloutFromEnv() projectauth.RolloutPhase {
+	raw := strings.TrimSpace(os.Getenv("PROJECT_PERMISSION_ROLLOUT_PHASE"))
+	if raw == "" {
+		return projectauth.LegacyRolloutPhase(os.Getenv("PROJECT_PERMISSION_ENABLED") == "true")
+	}
+	phase, err := projectauth.ParseRolloutPhase(raw)
+	if err != nil {
+		// Authorization rollout configuration is a security boundary. Refuse to
+		// start with a typo instead of silently opening or closing access.
+		panic(err)
+	}
+	return phase
 }

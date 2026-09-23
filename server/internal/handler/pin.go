@@ -6,7 +6,9 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
+	"github.com/multica-ai/multica/server/pkg/projectauth"
 	"github.com/multica-ai/multica/server/pkg/protocol"
 )
 
@@ -65,6 +67,28 @@ func (h *Handler) ListPins(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to list pins")
 		return
 	}
+	projectAuthEnabled := h.ProjectAuth != nil && h.ProjectAuth.Enabled()
+	includeWorkspaceOwned := r.URL.Query().Get("include_workspace_owned") != "false"
+	visibleProjects := map[pgtype.UUID]struct{}(nil)
+	visibleIssues := map[pgtype.UUID]struct{}(nil)
+	if projectAuthEnabled {
+		visibleProjects, err = h.visibleProjectIDSet(r.Context(), workspaceID, userID)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to list pins")
+			return
+		}
+		issueIDs := make([]pgtype.UUID, 0)
+		for _, p := range pins {
+			if p.ItemType == "issue" {
+				issueIDs = append(issueIDs, p.ItemID)
+			}
+		}
+		visibleIssues, err = h.visibleIssueIDsByProjectPermissionWithWorkspaceScope(r.Context(), parseUUID(workspaceID), parseUUID(userID), issueIDs, includeWorkspaceOwned)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to list pins")
+			return
+		}
+	}
 
 	// Capability opt-in: clients built before saved views classified every
 	// non-issue pin as a project pin, fetched its detail, got 404, and
@@ -78,6 +102,33 @@ func (h *Handler) ListPins(w http.ResponseWriter, r *http.Request) {
 	for _, p := range pins {
 		if p.ItemType == "view" && !includeViews {
 			continue
+		}
+		if projectAuthEnabled {
+			switch p.ItemType {
+			case "project":
+				if _, ok := visibleProjects[p.ItemID]; !ok {
+					continue
+				}
+			case "issue":
+				if _, ok := visibleIssues[p.ItemID]; !ok {
+					continue
+				}
+			case "view":
+				view, viewErr := h.Queries.GetIssueView(r.Context(), db.GetIssueViewParams{
+					ID: p.ItemID, WorkspaceID: parseUUID(workspaceID),
+				})
+				if viewErr != nil {
+					continue
+				}
+				allowed, permissionErr := h.issueViewProjectAllowed(r.Context(), view, userID)
+				if permissionErr != nil {
+					writeError(w, http.StatusInternalServerError, "failed to list pins")
+					return
+				}
+				if !allowed {
+					continue
+				}
+			}
 		}
 		resp = append(resp, pinnedItemToResponse(p))
 	}
@@ -117,10 +168,14 @@ func (h *Handler) CreatePin(w http.ResponseWriter, r *http.Request) {
 	// Verify the item exists in this workspace
 	switch req.ItemType {
 	case "issue":
-		if _, err := h.Queries.GetIssueInWorkspace(r.Context(), db.GetIssueInWorkspaceParams{
+		issue, err := h.Queries.GetIssueInWorkspace(r.Context(), db.GetIssueInWorkspaceParams{
 			ID: itemUUID, WorkspaceID: wsUUID,
-		}); err != nil {
+		})
+		if err != nil {
 			writeError(w, http.StatusNotFound, "issue not found")
+			return
+		}
+		if !h.requireIssueProjectPermission(w, r, issue, projectauth.View) {
 			return
 		}
 	case "project":
@@ -128,6 +183,9 @@ func (h *Handler) CreatePin(w http.ResponseWriter, r *http.Request) {
 			ID: itemUUID, WorkspaceID: wsUUID,
 		}); err != nil {
 			writeError(w, http.StatusNotFound, "project not found")
+			return
+		}
+		if !h.requireProjectPermission(w, r, req.ItemID, workspaceID, projectauth.View) {
 			return
 		}
 	case "view":
@@ -139,6 +197,9 @@ func (h *Handler) CreatePin(w http.ResponseWriter, r *http.Request) {
 		})
 		if err != nil || !canReadIssueView(view, parseUUID(userID)) {
 			writeError(w, http.StatusNotFound, "view not found")
+			return
+		}
+		if !h.requireIssueViewProjectPermission(w, r, view, userID) {
 			return
 		}
 	}

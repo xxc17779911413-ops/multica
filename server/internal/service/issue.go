@@ -137,6 +137,13 @@ type IssueCreateOpts struct {
 	// still resolving, then promotes the returned task after attachment binding.
 	// Zero preserves the ordinary immediate enqueue path.
 	AssignedAgentRunFireAt time.Time
+
+	// BeforeCommit lets a transport adapter persist narrowly-related policy
+	// state in the same transaction as the issue. 2026-08-27 coder(lq): The
+	// self-hosted project-permission overlay uses this to grant assignees and
+	// mentioned members access without coupling the upstream issue service to
+	// projectauth.
+	BeforeCommit func(ctx context.Context, tx pgx.Tx, issue db.Issue) error
 }
 
 // ErrActiveDuplicate signals that the duplicate guard found an active
@@ -498,6 +505,12 @@ func (s *IssueService) Create(ctx context.Context, p IssueCreateParams, opts Iss
 		assignedTask, err = s.TaskService.createDeferredChannelIssueTaskWithQueries(ctx, qtx, issue, opts.AssignedAgentRunFireAt)
 		if err != nil {
 			return IssueCreateResult{}, fmt.Errorf("create deferred channel issue task: %w", err)
+		}
+	}
+
+	if opts.BeforeCommit != nil {
+		if err := opts.BeforeCommit(ctx, tx, issue); err != nil {
+			return IssueCreateResult{}, fmt.Errorf("before issue commit: %w", err)
 		}
 	}
 

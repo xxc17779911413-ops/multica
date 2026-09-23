@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
+	"github.com/multica-ai/multica/server/pkg/projectauth"
 )
 
 // Per-user view-bar preferences (hidden items + order) for one surface
@@ -40,6 +41,12 @@ func (h *Handler) resolvePreferenceScope(
 			ID: projUUID, WorkspaceID: wsUUID,
 		}); err != nil {
 			writeError(w, http.StatusNotFound, "project not found")
+			return pgtype.UUID{}, false
+		}
+		// 2026-08-27 coder(lq): Project-scoped preferences are an indirect
+		// view surface; require the same project View permission as the saved
+		// view itself so preference reads/writes cannot enumerate hidden projects.
+		if !h.requireProjectPermission(w, r, uuidToString(projUUID), uuidToString(wsUUID), projectauth.View) {
 			return pgtype.UUID{}, false
 		}
 		return projUUID, true

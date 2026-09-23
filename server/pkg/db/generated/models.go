@@ -824,6 +824,7 @@ type Issue struct {
 	LastActivityAt     pgtype.Timestamptz `json:"last_activity_at"`
 	TriageState        pgtype.Text        `json:"triage_state"`
 	DuplicateOfIssueID pgtype.UUID        `json:"duplicate_of_issue_id"`
+	ArchivedAt         pgtype.Timestamptz `json:"archived_at"`
 }
 
 type IssueDependency struct {
@@ -1270,6 +1271,34 @@ type Project struct {
 	Priority    string             `json:"priority"`
 	StartDate   pgtype.Date        `json:"start_date"`
 	DueDate     pgtype.Date        `json:"due_date"`
+	CreatedBy   pgtype.UUID        `json:"created_by"`
+}
+
+type ProjectMember struct {
+	ID           pgtype.UUID        `json:"id"`
+	ProjectID    pgtype.UUID        `json:"project_id"`
+	UserID       pgtype.UUID        `json:"user_id"`
+	Role         string             `json:"role"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+	CustomRoleID pgtype.UUID        `json:"custom_role_id"`
+}
+
+type ProjectPermissionRole struct {
+	ID          pgtype.UUID        `json:"id"`
+	WorkspaceID pgtype.UUID        `json:"workspace_id"`
+	RoleKey     string             `json:"role_key"`
+	Name        string             `json:"name"`
+	Description string             `json:"description"`
+	IsSystem    bool               `json:"is_system"`
+	CreatedBy   pgtype.UUID        `json:"created_by"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+}
+
+type ProjectPermissionRolePermission struct {
+	RoleID     pgtype.UUID `json:"role_id"`
+	Permission string      `json:"permission"`
 }
 
 type ProjectResource struct {
@@ -1282,6 +1311,58 @@ type ProjectResource struct {
 	Position     int32              `json:"position"`
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 	CreatedBy    pgtype.UUID        `json:"created_by"`
+}
+
+type ProjectauthAccessGrant struct {
+	ID          pgtype.UUID        `json:"id"`
+	WorkspaceID pgtype.UUID        `json:"workspace_id"`
+	ProjectID   pgtype.UUID        `json:"project_id"`
+	IssueID     pgtype.UUID        `json:"issue_id"`
+	SubjectType string             `json:"subject_type"`
+	SubjectID   string             `json:"subject_id"`
+	RoleKey     pgtype.Text        `json:"role_key"`
+	Permission  pgtype.Text        `json:"permission"`
+	Source      string             `json:"source"`
+	GrantedBy   pgtype.UUID        `json:"granted_by"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+}
+
+type ProjectauthIssueAccessGrant struct {
+	ID          pgtype.UUID        `json:"id"`
+	WorkspaceID pgtype.UUID        `json:"workspace_id"`
+	IssueID     pgtype.UUID        `json:"issue_id"`
+	SubjectType string             `json:"subject_type"`
+	SubjectID   string             `json:"subject_id"`
+	RoleKey     string             `json:"role_key"`
+	Source      string             `json:"source"`
+	GrantedBy   pgtype.UUID        `json:"granted_by"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+}
+
+type ProjectauthOrganization struct {
+	ID          pgtype.UUID        `json:"id"`
+	WorkspaceID pgtype.UUID        `json:"workspace_id"`
+	Provider    string             `json:"provider"`
+	ExternalID  string             `json:"external_id"`
+	Name        string             `json:"name"`
+	ParentID    pgtype.UUID        `json:"parent_id"`
+	Status      string             `json:"status"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+}
+
+type ProjectauthOrganizationMember struct {
+	OrganizationID pgtype.UUID        `json:"organization_id"`
+	WorkspaceID    pgtype.UUID        `json:"workspace_id"`
+	UserID         pgtype.UUID        `json:"user_id"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+}
+
+type ProjectauthUserLogin struct {
+	UserID         pgtype.UUID        `json:"user_id"`
+	LastLoggedInAt pgtype.Timestamptz `json:"last_logged_in_at"`
 }
 
 type QuickAction struct {

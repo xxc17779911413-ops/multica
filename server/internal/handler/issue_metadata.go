@@ -15,6 +15,7 @@ import (
 	"github.com/multica-ai/multica/server/internal/logger"
 	"github.com/multica-ai/multica/server/internal/util"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
+	"github.com/multica-ai/multica/server/pkg/projectauth"
 	"github.com/multica-ai/multica/server/pkg/protocol"
 )
 
@@ -177,6 +178,12 @@ func (h *Handler) SetIssueMetadataKey(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	if rejectArchivedIssueMutation(w, issue) {
+		return
+	}
+	if !h.requireIssueProjectPermission(w, r, issue, projectauth.Edit) {
+		return
+	}
 	userID, ok := requireUserID(w, r)
 	if !ok {
 		return
@@ -262,18 +269,22 @@ func (h *Handler) DeleteIssueMetadataKey(w http.ResponseWriter, r *http.Request)
 	if !ok {
 		return
 	}
+	if rejectArchivedIssueMutation(w, issue) {
+		return
+	}
+	if !h.requireIssueProjectPermission(w, r, issue, projectauth.Edit) {
+		return
+	}
 	userID, ok := requireUserID(w, r)
 	if !ok {
 		return
 	}
 
 	queryStarted := time.Now()
-	updated, err := wakeupWrite(h, r, func(q *db.Queries) (db.DeleteIssueMetadataKeyRow, error) {
-		return q.DeleteIssueMetadataKey(r.Context(), db.DeleteIssueMetadataKeyParams{
-			ID:          issue.ID,
-			WorkspaceID: issue.WorkspaceID,
-			Key:         key,
-		})
+	updated, err := h.Queries.DeleteIssueMetadataKey(r.Context(), db.DeleteIssueMetadataKeyParams{
+		ID:          issue.ID,
+		WorkspaceID: issue.WorkspaceID,
+		Key:         key,
 	})
 	queryDuration := time.Since(queryStarted)
 	if err != nil {

@@ -33,6 +33,7 @@ import (
 	"github.com/multica-ai/multica/server/pkg/agent"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 	"github.com/multica-ai/multica/server/pkg/dbid"
+	"github.com/multica-ai/multica/server/pkg/projectauth"
 	"github.com/multica-ai/multica/server/pkg/protocol"
 	"github.com/multica-ai/multica/server/pkg/redact"
 	"github.com/multica-ai/multica/server/pkg/skillbundle"
@@ -2630,6 +2631,28 @@ func (h *Handler) buildClaimedTaskResponse(r *http.Request, task *db.AgentTaskQu
 		if failure := h.rejectClaimOnWorkspaceMismatch(r.Context(), task, resp.WorkspaceID, runtimeID, runtimeWorkspaceID, false); failure != nil {
 			return resp, deliveredCommentIDs, issueSnapshot, agentSkillCount, builtinSkillCount, failure
 		}
+		if authErr := h.authorizeIssueAgentUse(r.Context(), issue, service.AuthorizationSubject(task.OriginatorUserID, task.AccountableUserID), "claim"); authErr != nil {
+			if errors.Is(authErr, projectauth.ErrStorageUnavailable) || errors.Is(authErr, projectauth.ErrMigrationRequired) || errors.Is(authErr, projectauth.ErrDisabled) {
+				if _, requeueErr := h.TaskService.RequeueTaskAfterClaimFailure(r.Context(), *task); requeueErr != nil {
+					slog.Error("task claim: requeue after authorization storage failure failed", "task_id", uuidToString(task.ID), "error", requeueErr)
+				}
+				return resp, deliveredCommentIDs, issueSnapshot, agentSkillCount, builtinSkillCount, &claimBuildFailure{outcome: "error_task_authorization", status: http.StatusServiceUnavailable, message: "task authorization is temporarily unavailable"}
+			}
+			if errors.Is(authErr, projectauth.ErrCrossWorkspace) || errors.Is(authErr, projectauth.ErrInvalidRoleScope) || errors.Is(authErr, projectauth.ErrInvalidIssuePermission) {
+				return resp, deliveredCommentIDs, issueSnapshot, agentSkillCount, builtinSkillCount, h.failClaimedTaskBeforeLaunch(
+					r.Context(), task,
+					"This task cannot run because its issue has an invalid authorization resource binding.",
+					taskfailure.ReasonInvalidTaskIdentity,
+					"error_invalid_task_identity", http.StatusConflict, "invalid task authorization resource binding",
+				)
+			}
+			return resp, deliveredCommentIDs, issueSnapshot, agentSkillCount, builtinSkillCount, h.failClaimedTaskBeforeLaunch(
+				r.Context(), task,
+				"This task cannot run because the original requester no longer has permission to use an agent on this task.",
+				taskfailure.ReasonTaskPermissionRevoked,
+				"error_task_permission_revoked", http.StatusForbidden, "task permission was revoked before claim",
+			)
+		}
 		resp.ThreadName = issue.Title
 		issueNumber = issue.Number
 
@@ -2755,7 +2778,43 @@ func (h *Handler) buildClaimedTaskResponse(r *http.Request, task *db.AgentTaskQu
 			}
 		}
 
-		projectCtx, projectErr := h.resolveClaimProjectContext(r.Context(), issue.ProjectID, issue.WorkspaceID)
+		var projectCtx claimProjectContext
+		var projectErr error
+		// 2026-08-29 coder(lq): Projectless Issues are valid Agent tasks. Keep
+		// the strict resolver for an explicitly project-bound Issue so stale or
+		// cross-workspace references still fail closed, while a NULL project_id
+		// receives the workspace context fallback.
+		if h.ProjectAuth != nil && h.ProjectAuth.Enabled() {
+			// Task permission and project-resource visibility are separate. A
+			// direct/parent task grant may authorize the run without authorizing
+			// repositories or other project resources. Projectless tasks likewise
+			// receive no workspace-repository fallback under the overlay.
+			if issue.ProjectID.Valid && task.OriginatorUserID.Valid {
+				subject := projectauth.Subject{UserID: uuidToString(task.OriginatorUserID), WorkspaceID: uuidToString(issue.WorkspaceID)}
+				projectAccessErr := h.ProjectAuth.Check(r.Context(), subject, uuidToString(issue.ProjectID), projectauth.View)
+				if projectAccessErr == nil {
+					projectCtx, projectErr = h.resolveRequiredIssueClaimProjectContext(r.Context(), issue.ProjectID, issue.WorkspaceID)
+				} else if errors.Is(projectAccessErr, projectauth.ErrStorageUnavailable) ||
+					errors.Is(projectAccessErr, projectauth.ErrMigrationRequired) ||
+					errors.Is(projectAccessErr, projectauth.ErrDisabled) {
+					projectErr = projectAccessErr
+				}
+			}
+		} else {
+			projectCtx, projectErr = h.resolveClaimProjectContext(r.Context(), issue.ProjectID, issue.WorkspaceID)
+		}
+		if errors.Is(projectErr, errIssueProjectRequired) {
+			// 2026-08-27 coder(lq): An Issue is project-scoped when the
+			// permission overlay is enabled. Settle stale/cross-workspace
+			// references terminally instead of dispatching with workspace repos.
+			return resp, deliveredCommentIDs, issueSnapshot, agentSkillCount, builtinSkillCount, h.failClaimedTaskBeforeLaunch(
+				r.Context(), task,
+				"This task cannot run because its issue is not attached to a valid project in this workspace.",
+				taskfailure.ReasonInvalidTaskIdentity,
+				"error_issue_project_required", http.StatusConflict,
+				"issue task must reference a valid project",
+			)
+		}
 		if projectErr != nil {
 			slog.Error("issue claim: load project context failed; preserving task for redelivery",
 				"task_id", uuidToString(task.ID),
@@ -5484,6 +5543,12 @@ func (h *Handler) CancelTask(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	// 2026-08-27 coder(lq): Cancelling a task mutates the issue execution
+	// state, so issue visibility alone is insufficient; require the project's
+	// manage permission before allowing this issue-scoped cancellation route.
+	if !h.requireIssueProjectPermission(w, r, issue, projectauth.IssueManage) {
+		return
+	}
 
 	taskID := chi.URLParam(r, "taskId")
 	existing, err := h.Queries.GetAgentTask(r.Context(), parseUUID(taskID))
@@ -5815,6 +5880,27 @@ func (h *Handler) ListTaskMessagesByUser(w http.ResponseWriter, r *http.Request)
 	if wsID == "" || wsID != middleware.WorkspaceIDFromContext(r.Context()) {
 		writeError(w, http.StatusNotFound, "task not found")
 		return
+	}
+	// 2026-08-27 coder(lq): User-visible task transcripts inherit the issue's
+	// project View permission. Daemon endpoints intentionally stay on the
+	// machine-identity path above; this guard only applies to regular users.
+	if h.ProjectAuth != nil && h.ProjectAuth.Enabled() {
+		if !task.IssueID.Valid {
+			writeError(w, http.StatusNotFound, "task not found")
+			return
+		}
+		workspaceUUID, parseErr := util.ParseUUID(wsID)
+		if parseErr != nil {
+			writeError(w, http.StatusNotFound, "task not found")
+			return
+		}
+		issue, issueErr := h.Queries.GetIssueInWorkspace(r.Context(), db.GetIssueInWorkspaceParams{ID: task.IssueID, WorkspaceID: workspaceUUID})
+		if issueErr != nil || !h.requireIssueProjectPermission(w, r, issue, projectauth.View) {
+			if issueErr != nil {
+				writeError(w, http.StatusNotFound, "task not found")
+			}
+			return
+		}
 	}
 
 	var (

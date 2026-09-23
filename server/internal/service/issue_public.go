@@ -20,6 +20,10 @@ type IssueContentPatch struct {
 	Title            *string
 	Description      *string
 	ExpectedRevision *int64
+	// BeforeCommit lets an authorized transport persist narrowly-related
+	// overlay state atomically without coupling this upstream service to it.
+	// 2026-08-27 coder(lq): Project mention inheritance uses this hook.
+	BeforeCommit func(context.Context, pgx.Tx, db.Issue) error
 }
 
 // UpdateContent updates only the low-risk issue content fields exposed in the

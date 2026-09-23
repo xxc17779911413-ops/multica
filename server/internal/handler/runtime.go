@@ -120,7 +120,35 @@ func (h *Handler) GetRuntimeUsage(w http.ResponseWriter, r *http.Request) {
 	viewTZ := h.resolveViewingTZ(r)
 	since := parseSinceParamInTZ(r, 90, viewTZ)
 
-	resp, err := h.listRuntimeUsage(r.Context(), rt.ID, viewTZ, since)
+	var resp []RuntimeUsageResponse
+	var err error
+	if h.ProjectAuth != nil && h.ProjectAuth.Enabled() {
+		rows, queryErr := h.listRuntimeUsageWithProjectPermission(r.Context(), rt.ID, rt.WorkspaceID, parseUUID(requestUserID(r)), viewTZ, since)
+		if queryErr != nil {
+			writeError(w, http.StatusInternalServerError, "failed to list usage")
+			return
+		}
+		resp = make([]RuntimeUsageResponse, len(rows))
+		for i, row := range rows {
+			resp[i] = RuntimeUsageResponse{
+				RuntimeID:                uuidToString(rt.ID),
+				Date:                     row.Date.Time.Format("2006-01-02"),
+				Provider:                 row.Provider,
+				Model:                    row.Model,
+				InputTokens:              row.InputTokens,
+				OutputTokens:             row.OutputTokens,
+				CacheReadTokens:          row.CacheReadTokens,
+				CacheWriteTokens:         row.CacheWriteTokens,
+				CostUSDTicks:             row.CostUsdTicks,
+				UncostedInputTokens:      row.UncostedInputTokens,
+				UncostedOutputTokens:     row.UncostedOutputTokens,
+				UncostedCacheReadTokens:  row.UncostedCacheReadTokens,
+				UncostedCacheWriteTokens: row.UncostedCacheWriteTokens,
+			}
+		}
+	} else {
+		resp, err = h.listRuntimeUsage(r.Context(), rt.ID, viewTZ, since)
+	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list usage")
 		return
@@ -171,10 +199,16 @@ func (h *Handler) GetRuntimeTaskActivity(w http.ResponseWriter, r *http.Request)
 	}
 
 	viewTZ := h.resolveViewingTZ(r)
-	rows, err := h.Queries.GetRuntimeTaskHourlyActivity(r.Context(), db.GetRuntimeTaskHourlyActivityParams{
-		RuntimeID: rt.ID,
-		Tz:        viewTZ,
-	})
+	var rows []db.GetRuntimeTaskHourlyActivityRow
+	var err error
+	if h.ProjectAuth != nil && h.ProjectAuth.Enabled() {
+		rows, err = h.getRuntimeTaskHourlyActivityWithProjectPermission(r.Context(), rt.ID, rt.WorkspaceID, parseUUID(requestUserID(r)), viewTZ)
+	} else {
+		rows, err = h.Queries.GetRuntimeTaskHourlyActivity(r.Context(), db.GetRuntimeTaskHourlyActivityParams{
+			RuntimeID: rt.ID,
+			Tz:        viewTZ,
+		})
+	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to get task activity")
 		return
@@ -233,10 +267,16 @@ func (h *Handler) GetRuntimeUsageByAgent(w http.ResponseWriter, r *http.Request)
 	viewTZ := h.resolveViewingTZ(r)
 	since := parseSinceParamInTZ(r, 30, viewTZ)
 
-	rows, err := h.Queries.ListRuntimeUsageByAgent(r.Context(), db.ListRuntimeUsageByAgentParams{
-		RuntimeID: rt.ID,
-		Since:     since,
-	})
+	var rows []db.ListRuntimeUsageByAgentRow
+	var err error
+	if h.ProjectAuth != nil && h.ProjectAuth.Enabled() {
+		rows, err = h.listRuntimeUsageByAgentWithProjectPermission(r.Context(), rt.ID, rt.WorkspaceID, parseUUID(requestUserID(r)), since)
+	} else {
+		rows, err = h.Queries.ListRuntimeUsageByAgent(r.Context(), db.ListRuntimeUsageByAgentParams{
+			RuntimeID: rt.ID,
+			Since:     since,
+		})
+	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list usage by agent")
 		return
@@ -303,11 +343,17 @@ func (h *Handler) GetRuntimeUsageByHour(w http.ResponseWriter, r *http.Request) 
 	viewTZ := h.resolveViewingTZ(r)
 	since := parseSinceParamInTZ(r, 30, viewTZ)
 
-	rows, err := h.Queries.GetRuntimeUsageByHour(r.Context(), db.GetRuntimeUsageByHourParams{
-		RuntimeID: rt.ID,
-		Since:     since,
-		Tz:        viewTZ,
-	})
+	var rows []db.GetRuntimeUsageByHourRow
+	var err error
+	if h.ProjectAuth != nil && h.ProjectAuth.Enabled() {
+		rows, err = h.getRuntimeUsageByHourWithProjectPermission(r.Context(), rt.ID, rt.WorkspaceID, parseUUID(requestUserID(r)), viewTZ, since)
+	} else {
+		rows, err = h.Queries.GetRuntimeUsageByHour(r.Context(), db.GetRuntimeUsageByHourParams{
+			RuntimeID: rt.ID,
+			Since:     since,
+			Tz:        viewTZ,
+		})
+	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to get usage by hour")
 		return

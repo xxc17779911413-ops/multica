@@ -10,6 +10,7 @@ import (
 	"github.com/multica-ai/multica/server/internal/service"
 	"github.com/multica-ai/multica/server/internal/util"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
+	"github.com/multica-ai/multica/server/pkg/projectauth"
 )
 
 // maxPreviewTriggerIssues caps a single preview request so a pathological
@@ -120,6 +121,12 @@ type IssueTriggerPreviewRequest struct {
 	AssigneeType *string `json:"assignee_type"`
 	AssigneeID   *string `json:"assignee_id"`
 	Status       *string `json:"status"`
+	// 2026-08-28 coder(lq): Keep project selection optional while preserving
+	// project-level authorization whenever a project is supplied.
+	// ProjectID is optional for create previews. When provided, the write path
+	// still applies the project's IssueCreate permission; when omitted, the
+	// caller must only be a member of the workspace.
+	ProjectID *string `json:"project_id,omitempty"`
 }
 
 // IssueTriggerPreviewItem is one issue that WILL start a run under the
@@ -205,9 +212,25 @@ func (h *Handler) PreviewIssueTrigger(w http.ResponseWriter, r *http.Request) {
 		if req.Status != nil && *req.Status != "" {
 			status = *req.Status
 		}
+		var projectID pgtype.UUID
+		if req.ProjectID != nil && *req.ProjectID != "" {
+			projectID, err = util.ParseUUID(*req.ProjectID)
+			if err != nil {
+				writeError(w, http.StatusBadRequest, "invalid project_id")
+				return
+			}
+		}
+		// 2026-08-27 coder(lq): Create previews must use the same project
+		// IssueCreate gate as CreateIssue. Otherwise a member without access
+		// could probe agent readiness for an inaccessible project, and the UI
+		// could show a run that the subsequent create request must reject.
+		if !h.requireNewIssueProjectPermission(w, r, workspaceID, projectID, projectauth.IssueCreate) {
+			return
+		}
 		candidate := db.Issue{
 			WorkspaceID:  wsUUID,
 			Status:       status,
+			ProjectID:    projectID,
 			AssigneeType: newAssigneeType,
 			AssigneeID:   newAssigneeID,
 		}

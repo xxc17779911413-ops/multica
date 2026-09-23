@@ -22,6 +22,7 @@ import (
 	agentpkg "github.com/multica-ai/multica/server/pkg/agent"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 	"github.com/multica-ai/multica/server/pkg/dbid"
+	"github.com/multica-ai/multica/server/pkg/projectauth"
 	"github.com/multica-ai/multica/server/pkg/protocol"
 )
 
@@ -403,6 +404,26 @@ func (h *Handler) resolveSourceContextAuthors(ctx context.Context, workspaceID p
 	return states
 }
 
+// 2026-08-27 coder(lq): Source-context previews expose the full comment
+// thread, so they must enforce the anchor task's project View permission.
+func (h *Handler) requireSourceContextProjectView(w http.ResponseWriter, r *http.Request, workspaceID, anchorCommentID pgtype.UUID) bool {
+	comment, err := h.Queries.GetCommentInWorkspace(r.Context(), db.GetCommentInWorkspaceParams{
+		ID: anchorCommentID, WorkspaceID: workspaceID,
+	})
+	if err != nil {
+		writeError(w, http.StatusNotFound, "comment not found")
+		return false
+	}
+	issue, err := h.Queries.GetIssueInWorkspace(r.Context(), db.GetIssueInWorkspaceParams{
+		ID: comment.IssueID, WorkspaceID: workspaceID,
+	})
+	if err != nil {
+		writeError(w, http.StatusNotFound, "comment not found")
+		return false
+	}
+	return h.requireIssueProjectPermission(w, r, issue, projectauth.View)
+}
+
 func (h *Handler) PreviewCommentSubIssue(w http.ResponseWriter, r *http.Request) {
 	workspaceID := h.resolveWorkspaceID(r)
 	wsUUID, ok := parseUUIDOrBadRequest(w, workspaceID, "workspace_id")
@@ -682,15 +703,25 @@ func (h *Handler) createManualCommentSubIssue(w http.ResponseWriter, r *http.Req
 		}
 		projectID = parsed
 	}
+	if !projectID.Valid && capture.SourceIssueID.Valid {
+		// 2026-09-06 coder(lq): Source-context sub-issues inherit a
+		// project-bound source issue before the new-task authorization gate. A
+		// projectless source remains a valid projectless task target.
+		if sourceIssue, err := h.Queries.GetIssueInWorkspace(r.Context(), db.GetIssueInWorkspaceParams{
+			ID:          capture.SourceIssueID,
+			WorkspaceID: workspaceID,
+		}); err == nil && sourceIssue.ProjectID.Valid {
+			projectID = sourceIssue.ProjectID
+		}
+	}
+	if !h.requireNewIssueProjectPermission(w, r, util.UUIDToString(workspaceID), projectID, projectauth.IssueCreate) {
+		return errSourceContextResponseWritten
+	}
 	attachmentIDs, ok := parseUUIDSliceOrBadRequest(w, input.AttachmentIDs, "attachment_ids")
 	if !ok {
 		return errSourceContextResponseWritten
 	}
 	labelIDs, ok := parseUUIDSliceOrBadRequest(w, input.LabelIDs, "label_ids")
-	if !ok {
-		return errSourceContextResponseWritten
-	}
-	properties, ok := parseIssueCreateProperties(w, input.Properties)
 	if !ok {
 		return errSourceContextResponseWritten
 	}
@@ -724,10 +755,11 @@ func (h *Handler) createManualCommentSubIssue(w http.ResponseWriter, r *http.Req
 		WorkspaceID: workspaceID, Title: title, Description: ptrToText(input.Description), Status: status, Priority: priority,
 		AssigneeType: assigneeType, AssigneeID: assigneeID, CreatorType: "member", CreatorID: userID,
 		ParentIssueID: capture.SourceIssueID, ProjectID: projectID, StartDate: startDate, DueDate: dueDate,
-		AttachmentIDs: attachmentIDs, LabelIDs: labelIDs, Properties: properties, Stage: stage,
+		AttachmentIDs: attachmentIDs, LabelIDs: labelIDs, Stage: stage,
 		AllowDuplicate: input.AllowDuplicate, SourceContext: &capture,
 	}, service.IssueCreateOpts{
-		ActorID: util.UUIDToString(userID),
+		ActorID:      util.UUIDToString(userID),
+		BeforeCommit: h.issueAccessBeforeCommit(),
 		BroadcastPayload: func(issue db.Issue, _ []db.Attachment, labels []db.IssueLabel) map[string]any {
 			response := issueToResponse(issue, prefix)
 			labelResponses := labelsToResponse(labels)
@@ -840,6 +872,9 @@ func (h *Handler) prepareAgentCommentSubIssue(w http.ResponseWriter, r *http.Req
 			return nil, sourceContextBadRequest("project not found")
 		}
 		projectID = parsed
+	}
+	if !h.requireNewIssueProjectPermission(w, r, util.UUIDToString(workspaceID), projectID, projectauth.IssueCreate) {
+		return nil, errSourceContextResponseWritten
 	}
 	return &preparedAgentCommentSubIssue{
 		agentID: agentID, squadID: squadID, runtimeID: agent.RuntimeID,

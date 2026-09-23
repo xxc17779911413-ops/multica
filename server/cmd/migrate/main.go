@@ -338,6 +338,19 @@ var concurrentIndexCleanups = map[string]string{
 	"482_agent_task_queue_telemetry_started_index":              "idx_agent_task_queue_telemetry_started",
 	"484_issue_triage_state_index":                              "idx_issue_triage_state",
 	"537_issue_duplicate_of_index":                              "idx_issue_duplicate_of",
+
+	"559_projectauth_access_grants_project_unique":          "projectauth_access_grants_project_uniq",
+	"560_projectauth_access_grants_issue_unique":            "projectauth_access_grants_issue_uniq",
+	"561_projectauth_access_grants_workspace_project_index": "projectauth_access_grants_workspace_project_idx",
+	"562_projectauth_access_grants_subject_index":           "projectauth_access_grants_subject_idx",
+	"563_projectauth_organizations_unique":                  "projectauth_organizations_workspace_provider_external_uniq",
+	"564_projectauth_organization_members_unique":           "projectauth_organization_members_pkey",
+	"565_projectauth_organization_members_user_index":       "projectauth_organization_members_user_idx",
+	"567_projectauth_access_grants_id_unique":               "projectauth_access_grants_id_uniq",
+	"568_projectauth_organizations_id_unique":               "projectauth_organizations_id_uniq",
+	"570_projectauth_issue_access_grants_unique":            "projectauth_issue_access_grants_uniq",
+	"571_projectauth_issue_access_grants_issue_index":       "projectauth_issue_access_grants_issue_idx",
+	"572_projectauth_issue_access_grants_subject_index":     "projectauth_issue_access_grants_subject_idx",
 }
 
 // concurrentDownIndexCleanups covers every migration whose down direction
@@ -368,6 +381,19 @@ var concurrentDownIndexCleanups = map[string]string{
 	"463_drop_issue_description_bigm_index":                 "idx_issue_description_bigm",
 	"464_drop_issue_description_trgm_index":                 "idx_issue_description_trgm",
 	"473_drop_agent_task_queue_chat_with_session_index":     "idx_agent_task_queue_chat_with_session_created_at",
+
+	"575_projectauth_issue_policies_unique":                  "projectauth_issue_policies_workspace_issue_uidx",
+	"577_projectauth_grant_constraints_unique":               "projectauth_grant_constraints_workspace_grant_uidx",
+	"578_projectauth_grant_constraints_expiry_index":         "projectauth_grant_constraints_workspace_expiry_idx",
+	"580_projectauth_access_requests_id_unique":              "projectauth_access_requests_id_uidx",
+	"581_projectauth_access_requests_pending_resource_index": "projectauth_access_requests_pending_resource_idx",
+	"582_projectauth_access_requests_principal_index":        "projectauth_access_requests_principal_idx",
+	"583_projectauth_access_requests_idempotency_unique":     "projectauth_access_requests_workspace_idempotency_uidx",
+	"585_projectauth_task_roles_unique":                      "projectauth_task_roles_workspace_key_uidx",
+	"587_projectauth_task_role_permissions_unique":           "projectauth_task_role_permissions_role_permission_uidx",
+	"590_projectauth_access_request_notifications_unique":    "projectauth_access_request_notifications_delivery_uidx",
+	"591_projectauth_access_requests_pending_unique":         "projectauth_access_requests_pending_subject_role_uidx",
+	"593_projectauth_issue_mention_revocations_unique":       "projectauth_issue_mention_revocations_subject_uidx",
 }
 
 var preMigrationHooks = func() map[string]preMigrationHook {

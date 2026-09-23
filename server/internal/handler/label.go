@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/multica-ai/multica/server/internal/logger"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
+	"github.com/multica-ai/multica/server/pkg/projectauth"
 	"github.com/multica-ai/multica/server/pkg/protocol"
 )
 
@@ -439,6 +440,9 @@ func (h *Handler) AttachLabel(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	if !h.requireIssueProjectPermission(w, r, issue, projectauth.Edit) {
+		return
+	}
 	labelID, ok := parseUUIDOrBadRequest(w, req.LabelID, "label_id")
 	if !ok {
 		return
@@ -513,6 +517,9 @@ func (h *Handler) DetachLabel(w http.ResponseWriter, r *http.Request) {
 	// explicit 404.
 	issue, ok := h.loadIssueForUser(w, r, issueID)
 	if !ok {
+		return
+	}
+	if !h.requireIssueProjectPermission(w, r, issue, projectauth.Edit) {
 		return
 	}
 	labelUUID, ok := parseUUIDOrBadRequest(w, labelID, "label id")

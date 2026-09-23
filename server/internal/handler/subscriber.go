@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
+	"github.com/multica-ai/multica/server/pkg/projectauth"
 	"github.com/multica-ai/multica/server/pkg/protocol"
 )
 
@@ -86,6 +87,14 @@ func (h *Handler) SubscribeToIssue(w http.ResponseWriter, r *http.Request) {
 	if !h.isWorkspaceEntity(r.Context(), targetUserType, targetUserID, workspaceID) {
 		writeError(w, http.StatusForbidden, "target user is not a member of this workspace")
 		return
+	}
+	// 2026-08-27 coder(lq): A viewer may manage their own notifications, but
+	// subscribing another actor changes issue state for that actor and requires
+	// task edit permission.
+	if targetUserType != callerActorType || targetUserID != callerActorID {
+		if !h.requireIssueProjectPermission(w, r, issue, projectauth.Edit) {
+			return
+		}
 	}
 
 	// Explicit action, so this CLEARS any earlier opt-out tombstone — the user
@@ -164,6 +173,11 @@ func (h *Handler) unsubscribeFromIssue(w http.ResponseWriter, r *http.Request, s
 	if !h.isWorkspaceEntity(r.Context(), targetUserType, targetUserID, workspaceID) {
 		writeError(w, http.StatusForbidden, "target user is not a member of this workspace")
 		return
+	}
+	if targetUserType != callerActorType || targetUserID != callerActorID {
+		if !h.requireIssueProjectPermission(w, r, issue, projectauth.Edit) {
+			return
+		}
 	}
 
 	// Canonicalize before the target reaches either the advisory lock or a
