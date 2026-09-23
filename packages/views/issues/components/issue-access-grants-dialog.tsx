@@ -202,7 +202,13 @@ export function IssueAccessGrantsDialog({ issueId, projectId, defaultOpen = fals
     ? t(($) => $.permissions.task_permissions_load_failed)
     : t(($) => $.permissions.task_permissions_readonly_manage);
   const taskPolicyDescription = projectId
-    ? t(($) => $.permissions.task_policy_project_task, { version: controlQuery.data?.policy_version ?? "—" })
+    ? t(
+        ($) =>
+          mode === "restricted"
+            ? $.permissions.task_policy_project_task_restricted
+            : $.permissions.task_policy_project_task,
+        { version: controlQuery.data?.policy_version ?? "—" },
+      )
     : t(($) => $.permissions.task_policy_projectless_task, { version: controlQuery.data?.policy_version ?? "—" });
   const selectedCount = selectedEveryone ? 1 : selectedUserIds.size + selectedOrganizationIds.size;
   const pendingGrants = useMemo(() => {

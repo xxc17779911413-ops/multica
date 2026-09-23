@@ -359,6 +359,7 @@
     "task_source_delegated_originator": "원 요청자",
     "task_source_access_request": "승인된 접근 요청",
     "task_source_workspace_owner_bypass": "워크스페이스 소유자 우회",
-    "select_project_role_key": "프로젝트 역할 키"
+    "select_project_role_key": "프로젝트 역할 키",
+    "task_policy_project_task_restricted": "이 작업은 프로젝트 권한을 상속하지 않습니다. 권한이 부여된 멤버/부서만 볼 수 있습니다 · 정책 버전 {{version}}"
   }
 }
