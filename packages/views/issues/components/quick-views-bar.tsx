@@ -48,7 +48,8 @@ const QUICK_VIEW_RANGES: {
     | "quick_range_last3d"
     | "quick_range_this_week"
     | "quick_range_last7d"
-    | "quick_range_this_month";
+    | "quick_range_this_month"
+    | "quick_range_last30d";
 }[] = [
   { key: "today", labelKey: "quick_range_today" },
   { key: "yesterday", labelKey: "quick_range_yesterday" },
@@ -56,6 +57,7 @@ const QUICK_VIEW_RANGES: {
   { key: "this_week", labelKey: "quick_range_this_week" },
   { key: "last7d", labelKey: "quick_range_last7d" },
   { key: "this_month", labelKey: "quick_range_this_month" },
+  { key: "last30d", labelKey: "quick_range_last30d" },
 ];
 
 /** Presets that own a visible time window; only they show the range picker. */

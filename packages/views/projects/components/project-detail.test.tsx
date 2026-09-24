@@ -22,10 +22,17 @@ vi.mock("@multica/ui/lib/clipboard", () => ({
 }));
 
 vi.mock("@tanstack/react-query", () => ({
+  useQueryClient: () => ({
+    invalidateQueries: vi.fn(),
+    getQueryData: vi.fn(),
+    setQueryData: vi.fn(),
+  }),
   useQuery: (options: { queryKey?: readonly unknown[] }) => {
     switch (options.queryKey?.[0]) {
       case "project-detail":
-        return { data: PROJECT, isLoading: false };
+        // The server derives can_delete from the caller's role; emulate that
+        // here so the deletion affordance tests exercise the real gate.
+        return { data: { ...PROJECT, can_delete: mocks.role !== "member" }, isLoading: false };
       case "members":
         return {
           data: [{ user_id: "user-1", name: "User One", role: mocks.role }],
@@ -268,6 +275,7 @@ const PROJECT: Project = {
   priority: "high",
   lead_type: null,
   lead_id: null,
+  can_delete: true,
   start_date: null,
   due_date: null,
   created_at: "2026-06-01T00:00:00Z",

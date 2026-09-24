@@ -49,7 +49,8 @@ export type QuickViewRange =
   | "last3d"
   | "this_week"
   | "last7d"
-  | "this_month";
+  | "this_month"
+  | "last30d";
 export type IssueDateField = "created_at" | "updated_at" | "last_activity_at";
 
 /** Local-day [start, end) window for a quick-view range preset. */
@@ -81,6 +82,11 @@ export function quickViewRangeBounds(
     case "last7d": {
       const start = new Date(startOfDay);
       start.setDate(start.getDate() - 6);
+      return { start, end: endOfToday };
+    }
+    case "last30d": {
+      const start = new Date(startOfDay);
+      start.setDate(start.getDate() - 29);
       return { start, end: endOfToday };
     }
     case "this_month": {
