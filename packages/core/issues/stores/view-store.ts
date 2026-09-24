@@ -51,7 +51,7 @@ export type QuickViewRange =
   | "last7d"
   | "this_month"
   | "last30d";
-export type IssueDateField = "created_at" | "updated_at" | "last_activity_at";
+export type IssueDateField = "created_at" | "updated_at" | "last_activity_at" | "viewed_at";
 
 /** Local-day [start, end) window for a quick-view range preset. */
 export function quickViewRangeBounds(

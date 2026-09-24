@@ -195,11 +195,15 @@ function normalizeDateRange(from: Date, to: Date) {
 
 const DATE_FIELD_LABEL_KEY: Record<
   IssueDateField,
-  "date_field_created" | "date_field_updated" | "date_field_last_activity"
+  | "date_field_created"
+  | "date_field_updated"
+  | "date_field_last_activity"
+  | "date_field_viewed"
 > = {
   created_at: "date_field_created",
   updated_at: "date_field_updated",
   last_activity_at: "date_field_last_activity",
+  viewed_at: "date_field_viewed",
 };
 
 /** Feeding this to useIssueCounts hides every per-option badge (badges only
@@ -1090,7 +1094,7 @@ function DateSubContent({
       <DropdownMenuGroup>
         <DropdownMenuLabel>{t(($) => $.filters.date_field)}</DropdownMenuLabel>
         <DropdownMenuRadioGroup value={field} onValueChange={(next) => setFieldValue(next as IssueDateField)}>
-          {(["created_at", "updated_at"] as const).map((option) => (
+          {(["created_at", "updated_at", "last_activity_at", "viewed_at"] as const).map((option) => (
             // Picking the date field is a parameter for the presets below, not
             // the final action — keep the menu open so the user can continue
             // to a preset or the custom range.

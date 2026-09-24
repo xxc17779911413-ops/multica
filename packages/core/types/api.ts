@@ -205,7 +205,7 @@ export interface ListIssuesParams {
    * majority on the client.
    */
   scheduled?: boolean;
-  date_field?: "created_at" | "updated_at" | "last_activity_at";
+  date_field?: "created_at" | "updated_at" | "last_activity_at" | "viewed_at";
   date_start?: string;
   date_end?: string;
   sort_by?:
@@ -255,7 +255,7 @@ export interface ListGroupedIssuesParams {
   label_ids?: string[];
   group_assignee_type?: IssueAssigneeType | "none";
   group_assignee_id?: string;
-  date_field?: "created_at" | "updated_at" | "last_activity_at";
+  date_field?: "created_at" | "updated_at" | "last_activity_at" | "viewed_at";
   date_start?: string;
   date_end?: string;
   sort_by?:
@@ -327,7 +327,7 @@ export interface IssueTableFilters {
    *  equality / "No value", operator objects narrow scalar matches. */
   properties?: Record<string, PropertyFilterValue[]>;
   date?: {
-    field: "created_at" | "updated_at" | "last_activity_at";
+    field: "created_at" | "updated_at" | "last_activity_at" | "viewed_at";
     start: string;
     end: string;
   };

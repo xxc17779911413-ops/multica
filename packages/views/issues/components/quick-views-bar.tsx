@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import {
   Activity,
   CalendarRange,
@@ -12,9 +12,10 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@multica/core/api";
 import { useWorkspaceId } from "@multica/core/hooks";
-import type {
-  QuickViewKey,
-  QuickViewRange,
+import {
+  quickViewRangeBounds,
+  type QuickViewKey,
+  type QuickViewRange,
 } from "@multica/core/issues/stores/view-store";
 import {
   useViewStore,
@@ -86,13 +87,23 @@ export function QuickViewsBar() {
   });
 
   // The id window is server state; mirror each fetch into the view store so
-  // the surface query can consume it.
+  // the surface query can consume it. The range picker owns what "recent"
+  // means here too: only views inside the selected window count.
+  const viewedIdsWithinRange = useMemo(() => {
+    if (!recents.data) return [];
+    const bounds = quickViewRangeBounds(quickViewRange);
+    return recents.data.views
+      .filter((v) => {
+        const t = Date.parse(v.viewed_at);
+        return Number.isFinite(t) && t >= bounds.start.getTime() && t < bounds.end.getTime();
+      })
+      .map((v) => v.issue_id);
+  }, [recents.data, quickViewRange]);
+
   useEffect(() => {
-    if (quickView !== "recent_viewed" || !recents.data) return;
-    viewApi
-      .getState()
-      .setRecentViewedIds(recents.data.views.map((v) => v.issue_id));
-  }, [quickView, recents.data, viewApi]);
+    if (quickView !== "recent_viewed") return;
+    viewApi.getState().setRecentViewedIds(viewedIdsWithinRange);
+  }, [quickView, viewedIdsWithinRange, viewApi]);
 
   const activate = (key: QuickViewKey) => {
     const act = viewApi.getState();
@@ -112,9 +123,7 @@ export function QuickViewsBar() {
     act.setSortBy("created_at");
     act.setSortDirection("desc");
     if (key === "recent_viewed") {
-      act.setRecentViewedIds(
-        recents.data?.views.map((v) => v.issue_id) ?? [],
-      );
+      act.setRecentViewedIds(viewedIdsWithinRange);
     }
   };
 

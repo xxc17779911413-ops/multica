@@ -29,6 +29,11 @@ vi.mock("../issues/surface/issue-surface", () => ({
 vi.mock("../issues/components/issues-header", () => ({
   IssuesHeader: () => <div>Issue controls</div>,
 }));
+// The quick-view bar owns its own data deps (workspace id, view history);
+// this suite only routes the surface refresh state, so stub it out.
+vi.mock("../issues/components/quick-views-bar", () => ({
+  QuickViewsBar: () => <div>Quick views</div>,
+}));
 vi.mock("../my-issues/components/my-issues-header", () => ({
   MyIssuesHeader: () => <div>My issue controls</div>,
 }));

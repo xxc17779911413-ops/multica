@@ -655,7 +655,7 @@ func (h *Handler) compileIssueTableQuery(w http.ResponseWriter, r *http.Request,
 	if spec.Filters.Date != nil {
 		column := ""
 		switch spec.Filters.Date.Field {
-		case "created_at", "updated_at", "last_activity_at":
+		case "created_at", "updated_at", "last_activity_at", "viewed_at":
 			column = spec.Filters.Date.Field
 		default:
 			writeError(w, http.StatusBadRequest, "invalid filters.date.field")
@@ -667,7 +667,21 @@ func (h *Handler) compileIssueTableQuery(w http.ResponseWriter, r *http.Request,
 			writeError(w, http.StatusBadRequest, "invalid filters.date range")
 			return issueTableSQL{}, false
 		}
-		where = append(where, fmt.Sprintf("i.%s >= %s AND i.%s < %s", column, addArg(start), column, addArg(end)))
+		if spec.Filters.Date.Field == "viewed_at" {
+			// Viewed-time reads the caller's own view history, so the acting
+			// user is part of the predicate rather than a plain column range.
+			viewer := requestUserID(r)
+			if viewer == "" {
+				writeError(w, http.StatusBadRequest, "filters.date.field=viewed_at requires an authenticated user")
+				return issueTableSQL{}, false
+			}
+			where = append(where, fmt.Sprintf(
+				"EXISTS (SELECT 1 FROM issue_view_events viewed_filter WHERE viewed_filter.issue_id = i.id AND viewed_filter.user_id = %s::uuid AND viewed_filter.viewed_at >= %s AND viewed_filter.viewed_at < %s)",
+				addArg(viewer), addArg(start), addArg(end),
+			))
+		} else {
+			where = append(where, fmt.Sprintf("i.%s >= %s AND i.%s < %s", column, addArg(start), column, addArg(end)))
+		}
 	}
 
 	if spec.Filters.WorkingOnly {

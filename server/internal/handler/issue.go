@@ -1416,7 +1416,7 @@ func (h *Handler) ListIssues(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	dateFilter, ok := parseIssueDateFilter(w, r.URL.Query())
+	dateFilter, ok := parseIssueDateFilter(w, r.URL.Query(), requestUserID(r))
 	if !ok {
 		return
 	}
@@ -1988,9 +1988,12 @@ type issueDateFilter struct {
 	column string
 	start  time.Time
 	end    time.Time
+	// userID scopes per-user fields; viewed_at reads the caller's own view
+	// history, so it cannot be evaluated without the acting user.
+	userID string
 }
 
-func parseIssueDateFilter(w http.ResponseWriter, values url.Values) (*issueDateFilter, bool) {
+func parseIssueDateFilter(w http.ResponseWriter, values url.Values, userID string) (*issueDateFilter, bool) {
 	field := strings.TrimSpace(values.Get("date_field"))
 	startRaw := strings.TrimSpace(values.Get("date_start"))
 	endRaw := strings.TrimSpace(values.Get("date_end"))
@@ -2010,6 +2013,8 @@ func parseIssueDateFilter(w http.ResponseWriter, values url.Values) (*issueDateF
 		column = "updated_at"
 	case "last_activity_at":
 		column = "last_activity_at"
+	case "viewed_at":
+		column = "viewed_at"
 	default:
 		writeError(w, http.StatusBadRequest, "invalid date_field")
 		return nil, false
@@ -2030,7 +2035,7 @@ func parseIssueDateFilter(w http.ResponseWriter, values url.Values) (*issueDateF
 		return nil, false
 	}
 
-	return &issueDateFilter{column: column, start: start, end: end}, true
+	return &issueDateFilter{column: column, start: start, end: end, userID: userID}, true
 }
 
 func appendIssueDateFilter(where []string, addArg func(any) string, filter *issueDateFilter) []string {
@@ -2039,6 +2044,17 @@ func appendIssueDateFilter(where []string, addArg func(any) string, filter *issu
 	}
 	startRef := addArg(filter.start)
 	endRef := addArg(filter.end)
+	if filter.column == "viewed_at" {
+		if filter.userID == "" {
+			return append(where, "FALSE")
+		}
+		return append(where, fmt.Sprintf(
+			"EXISTS (SELECT 1 FROM issue_view_events viewed_filter WHERE viewed_filter.issue_id = i.id AND viewed_filter.user_id = %s::uuid AND viewed_filter.viewed_at >= %s AND viewed_filter.viewed_at < %s)",
+			addArg(filter.userID),
+			startRef,
+			endRef,
+		))
+	}
 	return append(where, fmt.Sprintf(
 		"i.%s >= %s AND i.%s < %s",
 		filter.column,
@@ -2387,7 +2403,7 @@ func (h *Handler) ListGroupedIssues(w http.ResponseWriter, r *http.Request) {
 		))
 	}
 
-	dateFilter, ok := parseIssueDateFilter(w, r.URL.Query())
+	dateFilter, ok := parseIssueDateFilter(w, r.URL.Query(), requestUserID(r))
 	if !ok {
 		return
 	}
