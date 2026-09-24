@@ -264,9 +264,10 @@ export function useIssueSurfaceController({
   );
 
   // Time-windowed quick views (最近创建 / 最近有新进展) own a date filter with
-  // an explicit range so the UI can show what "最近" means. The preset window
-  // outranks the filter-bar date chip: activating the preset must not silently
-  // AND with a range the user set days ago.
+  // an explicit range so the UI can show what "最近" means. An explicitly set
+  // filter-bar date outranks the preset window: picking a field + range from
+  // the Filter menu is the more specific intent, and the other order made the
+  // filter chip a silent no-op whenever a quick view was active.
   const quickViewDate = useMemo(() => {
     const field =
       quickView === "recent_created"
@@ -284,6 +285,8 @@ export function useIssueSurfaceController({
   }, [quickView, quickViewRange]);
 
   const dateParams = useMemo(() => {
+    const manual = issueDateFilterToApiParams(dateFilter);
+    if (manual.date_field) return manual;
     if (quickViewDate) {
       return {
         date_field: quickViewDate.field,
@@ -291,7 +294,7 @@ export function useIssueSurfaceController({
         date_end: quickViewDate.end,
       };
     }
-    return issueDateFilterToApiParams(dateFilter);
+    return manual;
   }, [dateFilter, quickViewDate]);
   // Active property catalog. Persisted view state can outlive definitions
   // (archive/delete): filters keyed by a non-active definition are stripped
