@@ -2,7 +2,7 @@
 # 密钥类配置放 .env（已被 gitignore），本文件可安全提交。
 services:
   backend:
-    image: multica-server-tf:v6
+    image: multica-server-tf:v7
     environment:
       FF_PLUGINS_V1: "true"
       # 项目/任务权限 overlay（lc-797 移植）：restricted = 读取+写入均强制
