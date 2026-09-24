@@ -1856,17 +1856,26 @@ func (h *Handler) issuePermissionSubject(r *http.Request, target db.Issue) (proj
 	userID := requestUser
 	if actorType == "agent" {
 		task, ok := h.taskFromRequestHeader(r)
-		if !ok || uuidToString(task.AgentID) != actorID || !task.IssueID.Valid || !task.OriginatorUserID.Valid {
-			return projectauth.Subject{}, "denied"
-		}
-		source, err := h.Queries.GetIssue(r.Context(), task.IssueID)
-		if err != nil || source.WorkspaceID != target.WorkspaceID {
+		if !ok || uuidToString(task.AgentID) != actorID || !task.OriginatorUserID.Valid {
 			return projectauth.Subject{}, "denied"
 		}
 		userID = uuidToString(task.OriginatorUserID)
-		sourceSubject := projectauth.Subject{UserID: userID, WorkspaceID: workspaceID}
-		if allowed, sourceReason := h.effectiveIssueAccessAllowed(r.Context(), sourceSubject, uuidToString(source.ID), projectauth.AgentUse, true); !allowed {
-			return projectauth.Subject{}, sourceReason
+		// Autopilot and other scheduled runs carry no source issue, so there
+		// is no AgentUse on a source issue left to re-check. Bind the subject
+		// to the originator -- the same principal the list/search predicates
+		// authorize against -- and let the target issue pass through the
+		// ordinary View/Edit gate below. Refusing those tasks outright made
+		// by-ID reads and write-backs fail with 404 "project not found" while
+		// list/search kept working, which is the inconsistency this closes.
+		if task.IssueID.Valid {
+			source, err := h.Queries.GetIssue(r.Context(), task.IssueID)
+			if err != nil || source.WorkspaceID != target.WorkspaceID {
+				return projectauth.Subject{}, "denied"
+			}
+			sourceSubject := projectauth.Subject{UserID: userID, WorkspaceID: workspaceID}
+			if allowed, sourceReason := h.effectiveIssueAccessAllowed(r.Context(), sourceSubject, uuidToString(source.ID), projectauth.AgentUse, true); !allowed {
+				return projectauth.Subject{}, sourceReason
+			}
 		}
 	}
 	if userID == "" {
