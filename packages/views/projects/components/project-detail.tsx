@@ -30,7 +30,7 @@ import { ProjectPermissionsPanel } from "./project-permissions-panel";
 import { ProjectStartDatePicker } from "./project-start-date-picker";
 import { ProjectDueDatePicker } from "./project-due-date-picker";
 import { IssueSurface } from "../../issues/surface/issue-surface";
-import { QuickViewsBar } from "../../issues/components/quick-views-bar";
+import { IssuesSurfaceHeader } from "../../issues/components/issues-surface-header";
 import { Skeleton } from "@multica/ui/components/ui/skeleton";
 import { Button } from "@multica/ui/components/ui/button";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@multica/ui/components/ui/resizable";
@@ -559,7 +559,15 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
           <IssueSurface
             scope={issueScope}
             modes={["board", "list", "table", "swimlane", "gantt"]}
-            renderHeader={() => <QuickViewsBar />}
+            renderHeader={({ controller }) => (
+              <IssuesSurfaceHeader
+                issues={controller.surfaceIssues}
+                workingAgents={controller.workingAgents}
+                facetCountsExact={controller.facetCountsExact}
+                tableFacetCounts={controller.tableFacetCounts}
+                onTableFacetChange={controller.setActiveTableFacet}
+              />
+            )}
           />
           </div>
         </ResizablePanel>

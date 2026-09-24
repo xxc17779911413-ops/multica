@@ -209,6 +209,9 @@ describe("useIssueSurfaceController", () => {
 
   it("derives the project scope and canonical server query", async () => {
     const store = getIssueSurfaceViewStore("project:p1");
+    // Fresh stores default to the 最近有新进展·今天 quick view, which adds its
+    // own date window; clear it so this case pins scope + sort alone.
+    store.getState().setQuickView(null);
     store.getState().setSortBy("priority");
     store.getState().setSortDirection("desc");
 

@@ -22,6 +22,11 @@ vi.mock("@multica/ui/lib/clipboard", () => ({
 }));
 
 vi.mock("@tanstack/react-query", () => ({
+  QueryClient: class {
+    invalidateQueries = vi.fn();
+    getQueryData = vi.fn();
+    setQueryData = vi.fn();
+  },
   useQueryClient: () => ({
     invalidateQueries: vi.fn(),
     getQueryData: vi.fn(),
@@ -146,6 +151,24 @@ vi.mock("@multica/ui/components/ui/dropdown-menu", () => ({
     </button>
   ),
   DropdownMenuSeparator: () => <hr />,
+  DropdownMenuGroup: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  DropdownMenuLabel: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  DropdownMenuCheckboxItem: ({ children }: { children: React.ReactNode }) => (
+    <button type="button">{children}</button>
+  ),
+  DropdownMenuRadioGroup: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  DropdownMenuRadioItem: ({ children }: { children: React.ReactNode }) => (
+    <button type="button">{children}</button>
+  ),
+  DropdownMenuSub: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  DropdownMenuSubTrigger: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  DropdownMenuSubContent: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
 }));
 
 vi.mock("@multica/ui/components/ui/popover", () => ({

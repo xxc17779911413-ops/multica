@@ -1,61 +1,11 @@
 "use client";
 
 import { ListTodo } from "lucide-react";
-import type {
-  Issue,
-  IssueTableFacetSpec,
-  IssueTableFacetsResponse,
-  WorkingAgentSummary,
-} from "@multica/core/types";
 import { useIssuesScope } from "@multica/core/issues/stores/issues-scope-store";
-import { useViewStore } from "@multica/core/issues/stores/view-store-context";
-import { PageHeader } from "../../layout/page-header";
 import { RefreshablePageIcon } from "../../layout/refreshable-page-icon";
 import { useT } from "../../i18n";
 import { IssueSurface } from "../surface/issue-surface";
-import { IssuesHeader } from "./issues-header";
-import { QuickViewsBar } from "./quick-views-bar";
-
-function IssuesSurfaceHeader({
-  issues,
-  workingAgents,
-  isRefreshing,
-  facetCountsExact,
-  tableFacetCounts,
-  onTableFacetChange,
-}: {
-  issues: Issue[];
-  workingAgents: WorkingAgentSummary[] | undefined;
-  isRefreshing: boolean;
-  facetCountsExact: boolean;
-  tableFacetCounts?: IssueTableFacetsResponse;
-  onTableFacetChange: (facet: IssueTableFacetSpec | null) => void;
-}) {
-  const { t } = useT("issues");
-  const dateFilter = useViewStore((s) => s.dateFilter);
-  const setDateFilter = useViewStore((s) => s.setDateFilter);
-
-  return (
-    <>
-      <PageHeader>
-        <RefreshablePageIcon refreshing={isRefreshing}>
-          <ListTodo className="size-4" />
-        </RefreshablePageIcon>
-        <h1 className="text-body font-medium">{t(($) => $.page.breadcrumb_title)}</h1>
-      </PageHeader>
-      <QuickViewsBar />
-      <IssuesHeader
-        scopedIssues={issues}
-        workingAgents={workingAgents}
-        dateFilter={dateFilter}
-        onDateFilterChange={setDateFilter}
-        facetCountsExact={facetCountsExact}
-        tableFacetCounts={tableFacetCounts}
-        onTableFacetChange={onTableFacetChange}
-      />
-    </>
-  );
-}
+import { IssuesSurfaceHeader } from "./issues-surface-header";
 
 export function IssuesPage() {
   const { t } = useT("issues");
@@ -69,9 +19,16 @@ export function IssuesPage() {
         batchToolbar="list"
         renderHeader={({ controller }) => (
           <IssuesSurfaceHeader
+            leading={
+              <>
+                <RefreshablePageIcon refreshing={controller.isRefreshing}>
+                  <ListTodo className="size-4" />
+                </RefreshablePageIcon>
+                <h1 className="text-body font-medium">{t(($) => $.page.breadcrumb_title)}</h1>
+              </>
+            }
             issues={controller.surfaceIssues}
             workingAgents={controller.workingAgents}
-            isRefreshing={controller.isRefreshing}
             facetCountsExact={controller.facetCountsExact}
             tableFacetCounts={controller.tableFacetCounts}
             onTableFacetChange={controller.setActiveTableFacet}
