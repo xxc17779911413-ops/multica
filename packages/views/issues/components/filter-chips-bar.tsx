@@ -2,7 +2,7 @@
 
 import { useIssueStatuses } from "@multica/core/issue-statuses/hooks";
 import { useStatusLabel } from "../utils/status-label";
-import { NO_PROPERTY_VALUE } from "../utils/filter";
+import { DATE_FIELD_LABEL_KEY, NO_PROPERTY_VALUE } from "../utils/filter";
 import { useMemo, type ReactNode } from "react";
 import {
   CalendarDays,
@@ -557,10 +557,7 @@ function useFilterChips(
     });
   }
   if (showDateChip && dateFilter) {
-    const fieldLabel =
-      dateFilter.field === "created_at"
-        ? t(($) => $.filters.date_field_created)
-        : t(($) => $.filters.date_field_updated);
+    const fieldLabel = t(($) => $.filters[DATE_FIELD_LABEL_KEY[dateFilter.field]]);
     const short = (dateOnly: string) => {
       const [, m, d] = dateOnly.split("-");
       return `${Number(m)}/${Number(d)}`;

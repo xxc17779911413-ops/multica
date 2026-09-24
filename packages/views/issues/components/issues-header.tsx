@@ -101,6 +101,7 @@ import {
 } from "@multica/core/issues/stores/view-store";
 import { useViewStore, useViewStoreApi } from "@multica/core/issues/stores/view-store-context";
 import { FilterChipsBar } from "./filter-chips-bar";
+import { DATE_FIELD_LABEL_KEY } from "../utils/filter";
 import { SaveViewDialog, type SaveViewScope } from "./save-view-dialog";
 import { ViewBar } from "./view-bar";
 import { toast } from "sonner";
@@ -192,19 +193,6 @@ function shortDateLabel(dateOnly: string) {
 function normalizeDateRange(from: Date, to: Date) {
   return from <= to ? [from, to] as const : [to, from] as const;
 }
-
-const DATE_FIELD_LABEL_KEY: Record<
-  IssueDateField,
-  | "date_field_created"
-  | "date_field_updated"
-  | "date_field_last_activity"
-  | "date_field_viewed"
-> = {
-  created_at: "date_field_created",
-  updated_at: "date_field_updated",
-  last_activity_at: "date_field_last_activity",
-  viewed_at: "date_field_viewed",
-};
 
 /** Feeding this to useIssueCounts hides every per-option badge (badges only
  *  render at count > 0) without touching the option lists themselves. */

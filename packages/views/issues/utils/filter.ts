@@ -1,6 +1,24 @@
 import type { Issue, IssueStatus, IssuePriority, IssueAssigneeGroup, ProjectStatus, PropertyFilterValue, PropertyOperatorFilter } from "@multica/core/types";
-import type { ActorFilterValue } from "@multica/core/issues/stores/view-store";
+import type {
+  ActorFilterValue,
+  IssueDateField,
+} from "@multica/core/issues/stores/view-store";
 import type { IssueActivityState } from "../surface/activity";
+
+/** Display label key per date-filter field; shared so the filter menu and the
+ *  applied-filter chip can never disagree on what a field is called. */
+export const DATE_FIELD_LABEL_KEY: Record<
+  IssueDateField,
+  | "date_field_created"
+  | "date_field_updated"
+  | "date_field_last_activity"
+  | "date_field_viewed"
+> = {
+  created_at: "date_field_created",
+  updated_at: "date_field_updated",
+  last_activity_at: "date_field_last_activity",
+  viewed_at: "date_field_viewed",
+};
 
 export interface IssueFilters {
   statusFilters: IssueStatus[];
